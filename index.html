@@ -77,7 +77,7 @@
 <body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
 
     <!-- Main container -->
-    <div id="app-container" class="relative w-full max-w-[500px] bg-gray-800 rounded-xl shadow-2xl p-6 flex flex-col overflow-hidden" style="min-height: 700px;">
+    <div id="app-container" class="relative w-full max-w-4xl bg-gray-800 rounded-xl shadow-2xl p-6 flex flex-col overflow-hidden" style="min-height: 700px;">
 
         <!-- Home screen -->
         <div id="home-screen" class="absolute inset-0 flex flex-col p-6 fade-enter-active fade-enter-to">
@@ -133,7 +133,7 @@
         </div>
 
         <!-- Priority picker window -->
-        <div id="priority-picker" class="absolute bg-gray-700 p-2 rounded-lg shadow-xl z-20 hidden flex-wrap gap-2">
+        <div id="priority-picker" class="absolute bg-gray-700 p-2 rounded-lg shadow-xl z-20 hidden flex-wrap gap-2" style="transform: translate(-50%, 0);">
             <button class="priority-color-btn w-8 h-8 rounded-full border-2 border-transparent transition duration-150 ease-in-out" data-color="#8b5cf6" style="background-color: #8b5cf6;"></button> <!-- Purple -->
             <button class="priority-color-btn w-8 h-8 rounded-full border-2 border-transparent transition duration-150 ease-in-out" data-color="#ef4444" style="background-color: #ef4444;"></button> <!-- Red -->
             <button class="priority-color-btn w-8 h-8 rounded-full border-2 border-transparent transition duration-150 ease-in-out" data-color="#f97316" style="background-color: #f97316;"></button> <!-- Orange -->
@@ -179,6 +179,60 @@
     </div>
 
     <script>
+        // DOM element references
+        const homeScreen = document.getElementById('home-screen');
+        const taskScreen = document.getElementById('task-screen');
+        const projectGrid = document.getElementById('project-grid');
+        const projectNameInput = document.getElementById('project-name-input');
+        const closeTaskScreenBtn = document.getElementById('close-task-screen-btn');
+        const addTaskBtn = document.getElementById('add-task-btn'); // Top-right plus button
+        const activeTasksContainer = document.getElementById('active-tasks-container');
+        const completedTasksContainer = document.getElementById('completed-tasks-container');
+        const priorityPicker = document.getElementById('priority-picker');
+        const sortTasksBtn = document.getElementById('sort-tasks-btn');
+        const projectContextMenu = document.getElementById('project-context-menu');
+        const moveProjectBtn = document.getElementById('move-project-btn');
+        const deleteProjectBtn = document.getElementById('delete-project-btn');
+        const changeProjectColorBtn = document.getElementById('change-project-color-btn');
+        const confirmModal = document.getElementById('confirm-modal');
+        const confirmMessage = document.getElementById('confirm-message');
+        const confirmYesBtn = document.getElementById('confirm-yes-btn');
+        const confirmNoBtn = document.getElementById('confirm-no-btn');
+        const colorPickerModal = document.getElementById('color-picker-modal');
+        const projectColorGrid = document.getElementById('project-color-grid');
+        const closeColorPickerModalBtn = document.getElementById('close-color-picker-modal-btn');
+        const messageBox = document.getElementById('message-box');
+        const appContainer = document.getElementById('app-container');
+        // New DOM element references
+        const bottomAddTaskContainer = document.getElementById('bottom-add-task-container');
+        const bottomAddTaskBtn = document.getElementById('bottom-add-task-btn');
+        const activeDropMessage = document.getElementById('active-drop-message');
+        const completedDropMessage = document.getElementById('completed-drop-message');
+
+
+        // Application state
+        let projects = [];
+        let currentProjectId = null;
+        let activeTaskCard = null; // Dragged task card
+        let activeProjectCell = null; // Dragged project cell
+        let longPressTimer = null;
+        let isMovingProjects = false; // Project move mode flag
+
+        // Constants
+        const NUM_PROJECT_CELLS = 12;
+        const PRIORITY_COLORS = {
+            '#8b5cf6': 'bg-purple-400', // Purple (slightly lighter)
+            '#ef4444': 'bg-red-400',    // Red (slightly lighter)
+            '#f97316': 'bg-orange-400', // Orange (slightly lighter)
+            '#facc15': 'bg-yellow-400', // Yellow (slightly lighter)
+            '#22c55e': 'bg-green-400',  // Green (slightly lighter)
+            '#3b82f6': 'bg-blue-400'    // Blue (slightly lighter)
+        };
+        const PROJECT_ICON_COLORS = [
+            '#6366f1', '#a855f7', '#ec4899', '#f43f5e', '#ef4444', '#f97316',
+            '#facc15', '#eab308', '#84cc16', '#22c55e', '#06b6d4', '#3b82f6'
+        ]; // Tailwind indigo-500, purple-500, pink-500, rose-500, red-500, orange-500, yellow-500, amber-500, lime-500, green-500, cyan-500, blue-500
+
         // Helper functions
         function generateUniqueId() {
             return crypto.randomUUID();
@@ -263,286 +317,6 @@
             completedDropMessage.classList.add('hidden');
         }
 
-        function openTaskScreen(projectId) {
-            currentProjectId = projectId;
-            const project = projects.find(p => p && p.id === projectId);
-            if (project) {
-                projectNameInput.value = project.name;
-                projectNameInput.dataset.projectId = projectId; // Store project ID on input
-                renderTasks(project.tasks);
-            }
-            showScreen(taskScreen);
-        }
-
-        function renderTasks(tasks) {
-            console.log("--- renderTasks called for project:", currentProjectId, "---"); // Debug log
-            const currentProject = projects.find(p => p && p.id === currentProjectId);
-            if (currentProject) {
-                console.log("Current project tasks state BEFORE rendering:", JSON.parse(JSON.stringify(currentProject.tasks))); // Debug log
-            }
-
-            activeTasksContainer.innerHTML = '';
-            completedTasksContainer.innerHTML = '';
-
-            const activeTasks = tasks.filter(task => task.status === 'active');
-            const completedTasks = tasks.filter(task => task.status === 'completed');
-
-            console.log("Active tasks to render:", JSON.parse(JSON.stringify(activeTasks))); // Debug log
-            console.log("Completed tasks to render:", JSON.parse(JSON.stringify(completedTasks))); // Debug log
-
-            if (activeTasks.length === 0) {
-                activeTasksContainer.innerHTML = '<p class="text-gray-400 text-center py-4">アクティブなタスクはありません。</p>';
-            } else {
-                activeTasks.forEach(task => activeTasksContainer.appendChild(createTaskCard(task)));
-            }
-
-            // Show bottom add button if 3 or more tasks
-            if (activeTasks.length >= 3) {
-                bottomAddTaskContainer.classList.remove('hidden');
-                bottomAddTaskContainer.classList.add('flex'); // Add flex to enable centering
-            } else {
-                bottomAddTaskContainer.classList.add('hidden');
-                bottomAddTaskContainer.classList.remove('flex');
-            }
-            // bottomAddTaskContainer is now outside activeTasksContainer, so no need to append it here.
-
-
-            if (completedTasks.length === 0) {
-                completedTasksContainer.innerHTML = '<p class="text-gray-400 text-center py-4">完了したタスクはありません。</p>';
-            } else {
-                completedTasks.forEach(task => completedTasksContainer.appendChild(createTaskCard(task)));
-            }
-            console.log("--- renderTasks finished ---"); // Debug log
-        }
-
-        function createTaskCard(task) {
-            const card = document.createElement('div');
-            // Removed bg-gray-600 class to allow custom background style
-            card.classList.add('task-card', 'relative', 'p-3', 'rounded-lg', 'shadow-md', 'flex', 'items-center', 'space-x-3', 'cursor-grab', 'transition', 'duration-200', 'ease-in-out', 'transform', 'hover:scale-[1.01]', 'active:scale-100');
-            card.draggable = true;
-            card.dataset.taskId = task.id;
-            card.dataset.status = task.status; // Store status for drag/swipe logic
-
-            const originalCardColor = '#4a5568'; // Equivalent to Tailwind's bg-gray-600
-
-            if (task.status === 'completed') {
-                // Completed tasks are solid blue
-                card.style.backgroundColor = '#3b82f6'; // Tailwind's blue-500
-            } else if (task.priorityColor) {
-                // Active tasks with priority: apply gradient
-                const priorityHex = task.priorityColor;
-                card.style.background = `linear-gradient(to right, ${originalCardColor} 0%, ${originalCardColor} 50%, ${priorityHex} 75%, ${priorityHex} 100%)`;
-            } else {
-                // Active tasks without priority: apply original gray color
-                card.style.backgroundColor = originalCardColor;
-            }
-
-            card.innerHTML = `
-                <!-- Drag handle area -->
-                <div class="drag-handle w-6 h-full flex items-center justify-center cursor-grab text-gray-300">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-                </div>
-                <!-- Task content input area -->
-                <textarea class="task-content flex-grow bg-transparent text-gray-100 placeholder-gray-300 focus:outline-none resize-none overflow-hidden"
-                          placeholder="タスク内容" rows="1">${task.content}</textarea>
-                <!-- Priority button -->
-                <button class="priority-btn w-8 h-8 rounded-full bg-gray-700 flex-shrink-0 flex items-center justify-center shadow-inner transition duration-200 ease-in-out transform hover:scale-110">
-                    <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"></path></svg>
-                </button>
-            `;
-
-            const taskContentInput = card.querySelector('.task-content');
-            const priorityBtn = card.querySelector('.priority-btn');
-
-            // Adjust textarea height dynamically
-            taskContentInput.addEventListener('input', () => {
-                taskContentInput.style.height = 'auto';
-                taskContentInput.style.height = (taskContentInput.scrollHeight) + 'px';
-            });
-            // Initial height adjustment
-            setTimeout(() => {
-                taskContentInput.style.height = 'auto';
-                taskContentInput.style.height = (taskContentInput.scrollHeight) + 'px';
-            }, 0);
-
-
-            // Update task content
-            taskContentInput.addEventListener('input', (event) => {
-                const project = projects.find(p => p && p.id === currentProjectId);
-                if (project) {
-                    const taskToUpdate = project.tasks.find(t => t.id === task.id);
-                    if (taskToUpdate) {
-                        taskToUpdate.content = event.target.value;
-                        saveProjects();
-                    }
-                }
-            });
-
-            // Priority button click event
-            priorityBtn.addEventListener('click', (event) => {
-                const btnRect = priorityBtn.getBoundingClientRect();
-                const appContainerRect = appContainer.getBoundingClientRect();
-
-                // Temporarily show to get dimensions, then hide
-                priorityPicker.style.visibility = 'hidden';
-                priorityPicker.classList.remove('hidden');
-                // Reset transform for accurate offsetWidth/Height
-                priorityPicker.style.transform = 'none'; 
-                const pickerWidth = priorityPicker.offsetWidth;
-                const pickerHeight = priorityPicker.offsetHeight;
-                priorityPicker.classList.add('hidden');
-                priorityPicker.style.visibility = 'visible';
-
-                // Desired initial position: centered horizontally relative to button, below button
-                let pickerLeft = btnRect.left + (btnRect.width / 2) - (pickerWidth / 2); // Calculate true left for centering
-                let pickerTop = btnRect.bottom + MENU_OFFSET;
-                
-                // Check for horizontal overflow and adjust
-                if (pickerLeft < appContainerRect.left + MENU_OFFSET) {
-                    pickerLeft = appContainerRect.left + MENU_OFFSET; // Align to left edge of app container
-                } else if ((pickerLeft + pickerWidth) > (appContainerRect.right - MENU_OFFSET)) {
-                    pickerLeft = appContainerRect.right - pickerWidth - MENU_OFFSET; // Align to right edge of app container
-                }
-
-                // Check for vertical overflow and adjust
-                if (pickerTop + pickerHeight > appContainerRect.bottom) {
-                    // Overflows bottom, try to place it above the button
-                    pickerTop = btnRect.top - pickerHeight - MENU_OFFSET;
-                    // Ensure it doesn't go off the top edge of the app container
-                    if (pickerTop < appContainerRect.top) {
-                        pickerTop = appContainerRect.top + MENU_OFFSET; // Fallback: place at top edge with padding
-                    }
-                }
-
-                priorityPicker.style.left = `${pickerLeft}px`;
-                priorityPicker.style.top = `${pickerTop}px`;
-                priorityPicker.style.transform = 'none'; // Keep transform as none since we calculated absolute position
-                priorityPicker.classList.remove('hidden');
-                priorityPicker.dataset.currentTaskId = task.id; // Store task ID for color selection
-
-                // Highlight currently selected color
-                document.querySelectorAll('.priority-color-btn').forEach(btn => {
-                    btn.classList.remove('border-blue-400'); // Remove previous highlight
-                    if (btn.dataset.color === task.priorityColor) {
-                        btn.classList.add('border-blue-400'); // Add highlight
-                    }
-                });
-            });
-
-            // Variables for touch events
-            let touchStartX = 0;
-            let touchStartY = 0;
-            let isSwiping = false;
-
-            card.addEventListener('touchstart', (e) => {
-                if (e.touches.length === 1) {
-                    touchStartX = e.touches[0].clientX;
-                    touchStartY = e.touches[0].clientY;
-                    isSwiping = false;
-                    card.style.transition = 'none'; // Disable transition during swipe
-                }
-            }, { passive: true });
-
-            card.addEventListener('touchmove', (e) => {
-                if (e.touches.length === 1 && task.status === 'active') {
-                    const touchCurrentX = e.touches[0].clientX;
-                    const deltaX = touchCurrentX - touchStartX;
-                    const deltaY = e.touches[0].clientY - touchStartY;
-
-                    // Determine if it's primarily a horizontal swipe
-                    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) { // Threshold for swipe
-                        isSwiping = true;
-                        card.style.transform = `translateX(${deltaX}px)`;
-                    } else {
-                        isSwiping = false;
-                    }
-                }
-            }, { passive: true });
-
-            card.addEventListener('touchend', () => {
-                card.style.transition = 'transform 0.2s ease-out'; // Re-enable transition
-                if (isSwiping && task.status === 'active') {
-                    const currentTransform = card.style.transform;
-                    const translateXMatch = currentTransform.match(/translateX\(([^)]+)px\)/);
-                    const currentX = translateXMatch ? parseFloat(translateXMatch[1]) : 0;
-
-                    if (currentX < -100) { // Swipe left threshold
-                        completeTask(task.id);
-                        card.style.transform = 'translateX(-100vw)'; // Animate off screen
-                        setTimeout(() => {
-                            card.remove(); // Remove after animation
-                            renderTasks(projects.find(p => p && p.id === currentProjectId).tasks); // Re-render to update containers
-                        }, 200);
-                    } else {
-                        card.style.transform = 'translateX(0)'; // Snap back
-                    }
-                }
-                isSwiping = false;
-            });
-
-            // Drag event listeners
-            card.addEventListener('dragstart', handleTaskDragStart);
-            card.addEventListener('dragover', handleTaskDragOver);
-            card.addEventListener('dragleave', handleTaskDragLeave);
-            card.addEventListener('drop', handleTaskDrop);
-            card.addEventListener('dragend', handleTaskDragEnd);
-
-            return card;
-        }
-
-        // Global DOM element references (declared globally, initialized in DOMContentLoaded)
-        let homeScreen;
-        let taskScreen;
-        let projectGrid;
-        let projectNameInput;
-        let closeTaskScreenBtn;
-        let addTaskBtn;
-        let activeTasksContainer;
-        let completedTasksContainer;
-        let priorityPicker;
-        let sortTasksBtn;
-        let projectContextMenu;
-        let moveProjectBtn;
-        let deleteProjectBtn;
-        let changeProjectColorBtn;
-        let confirmModal;
-        let confirmMessage;
-        let confirmYesBtn;
-        let confirmNoBtn;
-        let colorPickerModal;
-        let projectColorGrid;
-        let closeColorPickerModalBtn;
-        let messageBox;
-        let appContainer;
-        let bottomAddTaskContainer;
-        let bottomAddTaskBtn;
-        let activeDropMessage;
-        let completedDropMessage;
-
-        // Application state (declared globally)
-        let projects = [];
-        let currentProjectId = null;
-        let activeTaskCard = null; // Dragged task card
-        let activeProjectCell = null; // Dragged project cell
-        let longPressTimer = null;
-        let isMovingProjects = false; // Project move mode flag
-
-        // Constants (declared globally)
-        const NUM_PROJECT_CELLS = 12;
-        const MENU_OFFSET = 5; // New constant for menu/picker offset
-        const PRIORITY_COLORS = {
-            '#8b5cf6': 'bg-purple-400', // Purple (slightly lighter)
-            '#ef4444': 'bg-red-400',    // Red (slightly lighter)
-            '#f97316': 'bg-orange-400', // Orange (slightly lighter)
-            '#facc15': 'bg-yellow-400', // Yellow (slightly lighter)
-            '#22c55e': 'bg-green-400',  // Green (slightly lighter)
-            '#3b82f6': 'bg-blue-400'    // Blue (slightly lighter)
-        };
-        const PROJECT_ICON_COLORS = [
-            '#6366f1', '#a855f7', '#ec4899', '#f43f5e', '#ef4444', '#f97316',
-            '#facc15', '#eab308', '#84cc16', '#22c55e', '#06b6d4', '#3b82f6'
-        ]; // Tailwind indigo-500, purple-500, pink-500, rose-500, red-500, orange-500, yellow-500, amber-500, lime-500, green-500, cyan-500, blue-500
-
         // --- Data management ---
         function saveProjects() {
             localStorage.setItem('taskManagerProjects', JSON.stringify(projects));
@@ -579,8 +353,7 @@
                 const project = projects[i];
                 const cell = document.createElement('div');
                 // Added p-2 to project-cell for internal padding
-                // Added max-w-[100px] and max-h-[100px] for max size
-                cell.classList.add('project-cell', 'relative', 'w-full', 'aspect-square', 'rounded-xl', 'flex', 'flex-col', 'items-center', 'justify-center', 'cursor-pointer', 'transition', 'duration-200', 'ease-in-out', 'transform', 'hover:scale-105', 'shadow-lg', 'p-2', 'max-w-[100px]', 'max-h-[100px]');
+                cell.classList.add('project-cell', 'relative', 'w-full', 'aspect-square', 'rounded-xl', 'flex', 'flex-col', 'items-center', 'justify-center', 'cursor-pointer', 'transition', 'duration-200', 'ease-in-out', 'transform', 'hover:scale-105', 'shadow-lg', 'p-2');
                 cell.dataset.index = i; // Store index for drag and drop
 
                 if (project) {
@@ -589,10 +362,10 @@
 
                     // Project name and icon character
                     const projectContent = document.createElement('div');
-                    // Changed icon character size to text-3xl
+                    // Changed icon character size to text-4xl
                     projectContent.classList.add('flex', 'flex-col', 'items-center', 'justify-center', 'flex-grow');
                     projectContent.innerHTML = `
-                        <span class="text-3xl font-bold text-white uppercase select-none">${project.iconChar}</span>
+                        <span class="text-4xl font-bold text-white uppercase select-none">${project.iconChar}</span>
                         <span class="text-xs font-medium text-white opacity-75 mt-1">${project.name}</span>
                     `;
                     cell.appendChild(projectContent);
@@ -719,49 +492,35 @@
             const project = projects.find(p => p && p.id === projectId);
             if (!project) return;
 
+            // Store the project ID for context menu actions
             projectContextMenu.dataset.projectId = projectId;
 
-            const cellRect = cellElement.getBoundingClientRect();
+            // Position the context menu next to the cell
+            const cellRect = cellElement.getBoundingClientRect(); // Use cellElement directly
+            projectContextMenu.style.left = `${cellRect.right + 10}px`;
+            projectContextMenu.style.top = `${cellRect.top}px`;
+
+            // Adjust position if it goes off screen
             const appContainerRect = appContainer.getBoundingClientRect();
-
-            // Temporarily show to get dimensions, then hide
-            projectContextMenu.style.visibility = 'hidden';
-            projectContextMenu.classList.remove('hidden');
-            const menuWidth = projectContextMenu.offsetWidth;
-            const menuHeight = projectContextMenu.offsetHeight;
-            projectContextMenu.classList.add('hidden');
-            projectContextMenu.style.visibility = 'visible';
-
-            // Desired initial position: to the right of the cell
-            let menuLeft = cellRect.right + MENU_OFFSET; // Use MENU_OFFSET
-            let menuTop = cellRect.top;
-
-            // Check for horizontal overflow
-            if (menuLeft + menuWidth > appContainerRect.right) {
-                // If it overflows right, try to place it to the left of the cell
-                menuLeft = cellRect.left - menuWidth - MENU_OFFSET; // Use MENU_OFFSET
-                // Ensure it doesn't go off the left edge of the app container
-                if (menuLeft < appContainerRect.left) {
-                    menuLeft = appContainerRect.left + MENU_OFFSET; // Fallback: place at left edge with padding
-                }
+            if (parseFloat(projectContextMenu.style.left) + projectContextMenu.offsetWidth > appContainerRect.right) {
+                projectContextMenu.style.left = `${cellRect.left - projectContextMenu.offsetWidth - 10}px`;
+            }
+            if (parseFloat(projectContextMenu.style.top) + projectContextMenu.offsetHeight > appContainerRect.bottom) {
+                projectContextMenu.style.top = `${appContainerRect.bottom - projectContextMenu.offsetHeight}px`;
             }
 
-            // Check for vertical overflow
-            if (menuTop + menuHeight > appContainerRect.bottom) {
-                // If it overflows bottom, try to place it above the cell
-                menuTop = cellRect.top - menuHeight - MENU_OFFSET; // Adjusted for consistent offset when placing above
-                // Ensure it doesn't go off the top edge of the app container
-                if (menuTop < appContainerRect.top) {
-                    menuTop = appContainerRect.top + MENU_OFFSET; // Fallback: place at top edge with padding
-                }
-            }
-
-            projectContextMenu.style.left = `${menuLeft}px`;
-            projectContextMenu.style.top = `${menuTop}px`;
             projectContextMenu.classList.remove('hidden');
         }
 
         // --- Project move mode ---
+        moveProjectBtn.addEventListener('click', () => {
+            isMovingProjects = true;
+            projectContextMenu.classList.add('hidden');
+            renderHome(); // Re-render to make cells draggable and highlighted
+            showMessage('プロジェクトをドラッグ＆ドロップで入れ替えてください', 'info', 5000);
+            // Global click listener is added once on DOMContentLoaded, so no need to add here
+        });
+
         function handleProjectDragStart(event) {
             const cell = event.currentTarget;
             activeProjectCell = cell;
@@ -807,6 +566,437 @@
         }
 
         function handleProjectDragLeave(event) {
+            event.currentTarget.classList.remove('drag-over');
+        }
+
+        function handleProjectDrop(event) {
+            event.preventDefault();
+            const targetCell = event.currentTarget;
+            targetCell.classList.remove('drag-over');
+
+            const draggedProjectId = event.dataTransfer.getData('text/plain');
+            const draggedProjectIndex = parseInt(activeProjectCell.dataset.index);
+            const targetProjectIndex = parseInt(targetCell.dataset.index);
+
+            if (draggedProjectIndex !== targetProjectIndex) {
+                const draggedProject = projects[draggedProjectIndex];
+                const targetProject = projects[targetProjectIndex];
+
+                // Swap projects in the array
+                projects[targetProjectIndex] = draggedProject;
+                projects[draggedProjectIndex] = targetProject;
+
+                saveProjects();
+                renderHome();
+                showMessage('プロジェクトを入れ替えました', 'success');
+            }
+        }
+
+        function handleProjectDragEnd(event) {
+            activeProjectCell.classList.remove('dragging');
+            activeProjectCell = null;
+            // Do not exit move mode automatically after one drag
+            // The exitProjectMoveMode will handle it on next click outside
+        }
+
+
+        // --- Project deletion ---
+        deleteProjectBtn.addEventListener('click', () => {
+            const projectIdToDelete = projectContextMenu.dataset.projectId;
+            if (!projectIdToDelete) return;
+
+            projectContextMenu.classList.add('hidden'); // Hide context menu
+            confirmMessage.textContent = '本当にこのプロジェクトを削除しますか？';
+            showModal(confirmModal);
+
+            confirmYesBtn.onclick = () => {
+                const indexToDelete = projects.findIndex(p => p && p.id === projectIdToDelete);
+                if (indexToDelete !== -1) {
+                    projects[indexToDelete] = null; // Set to null to keep cell count
+                    saveProjects();
+                    renderHome();
+                    showMessage('プロジェクトを削除しました', 'success');
+                }
+                hideModal(confirmModal);
+            };
+
+            confirmNoBtn.onclick = () => {
+                hideModal(confirmModal);
+            };
+        });
+
+        // --- Project color change ---
+        changeProjectColorBtn.addEventListener('click', () => {
+            const projectIdToChangeColor = projectContextMenu.dataset.projectId;
+            if (!projectIdToChangeColor) return;
+
+            projectContextMenu.classList.add('hidden'); // Hide context menu
+            showModal(colorPickerModal);
+
+            projectColorGrid.innerHTML = '';
+            PROJECT_ICON_COLORS.forEach(color => {
+                const button = document.createElement('button');
+                button.classList.add('w-12', 'h-12', 'rounded-full', 'shadow-md', 'transition', 'duration-150', 'ease-in-out', 'transform', 'hover:scale-110', 'border-2', 'border-transparent');
+                button.style.backgroundColor = color;
+                button.dataset.color = color;
+                button.addEventListener('click', () => {
+                    const project = projects.find(p => p && p.id === projectIdToChangeColor);
+                    if (project) {
+                        project.color = color;
+                        saveProjects();
+                        renderHome();
+                        showMessage('プロジェクトの色を変更しました', 'success');
+                    }
+                    hideModal(colorPickerModal);
+                });
+                projectColorGrid.appendChild(button);
+            });
+        });
+
+        closeColorPickerModalBtn.addEventListener('click', () => {
+            hideModal(colorPickerModal);
+        });
+
+
+        // --- Display/hide task screen ---
+        function openTaskScreen(projectId) {
+            currentProjectId = projectId;
+            const project = projects.find(p => p && p.id === projectId);
+            if (project) {
+                projectNameInput.value = project.name;
+                projectNameInput.dataset.projectId = projectId; // Store project ID on input
+                renderTasks(project.tasks);
+            }
+            showScreen(taskScreen);
+        }
+
+        closeTaskScreenBtn.addEventListener('click', () => {
+            currentProjectId = null;
+            showScreen(homeScreen);
+            renderHome(); // Call renderHome to update task counts on project icons
+        });
+
+        // Handle project name input
+        projectNameInput.addEventListener('input', (event) => {
+            const projectId = event.target.dataset.projectId;
+            const project = projects.find(p => p && p.id === projectId);
+            if (project) {
+                project.name = event.target.value;
+                project.iconChar = event.target.value.charAt(0).toUpperCase() || '?';
+                saveProjects();
+                renderHome(); // Update icon on home screen
+            }
+        });
+
+        // --- Task rendering ---
+        function renderTasks(tasks) {
+            console.log("--- renderTasks called for project:", currentProjectId, "---"); // Debug log
+            const currentProject = projects.find(p => p && p.id === currentProjectId);
+            if (currentProject) {
+                console.log("Current project tasks state BEFORE rendering:", JSON.parse(JSON.stringify(currentProject.tasks))); // Debug log
+            }
+
+            activeTasksContainer.innerHTML = '';
+            completedTasksContainer.innerHTML = '';
+
+            const activeTasks = tasks.filter(task => task.status === 'active');
+            const completedTasks = tasks.filter(task => task.status === 'completed');
+
+            console.log("Active tasks to render:", JSON.parse(JSON.stringify(activeTasks))); // Debug log
+            console.log("Completed tasks to render:", JSON.parse(JSON.stringify(completedTasks))); // Debug log
+
+            if (activeTasks.length === 0) {
+                activeTasksContainer.innerHTML = '<p class="text-gray-400 text-center py-4">アクティブなタスクはありません。</p>';
+            } else {
+                activeTasks.forEach(task => activeTasksContainer.appendChild(createTaskCard(task)));
+            }
+
+            // Show bottom add button if 3 or more tasks
+            if (activeTasks.length >= 3) {
+                bottomAddTaskContainer.classList.remove('hidden');
+                bottomAddTaskContainer.classList.add('flex'); // Add flex to enable centering
+            } else {
+                bottomAddTaskContainer.classList.add('hidden');
+                bottomAddTaskContainer.classList.remove('flex');
+            }
+            // bottomAddTaskContainer is now outside activeTasksContainer, so no need to append it here.
+
+
+            if (completedTasks.length === 0) {
+                completedTasksContainer.innerHTML = '<p class="text-gray-400 text-center py-4">完了したタスクはありません。</p>';
+            } else {
+                completedTasks.forEach(task => completedTasksContainer.appendChild(createTaskCard(task)));
+            }
+            console.log("--- renderTasks finished ---"); // Debug log
+        }
+
+        // Make bottomAddTaskBtn have the same functionality as addTaskBtn
+        bottomAddTaskBtn.addEventListener('click', () => {
+            addTaskBtn.click(); // Trigger click event of existing addTaskBtn
+        });
+
+
+        function createTaskCard(task) {
+            const card = document.createElement('div');
+            // Removed bg-gray-600 class to allow custom background style
+            card.classList.add('task-card', 'relative', 'p-3', 'rounded-lg', 'shadow-md', 'flex', 'items-center', 'space-x-3', 'cursor-grab', 'transition', 'duration-200', 'ease-in-out', 'transform', 'hover:scale-[1.01]', 'active:scale-100');
+            card.draggable = true;
+            card.dataset.taskId = task.id;
+            card.dataset.status = task.status; // Store status for drag/swipe logic
+
+            const originalCardColor = '#4a5568'; // Equivalent to Tailwind's bg-gray-600
+
+            if (task.status === 'completed') {
+                // Completed tasks are solid blue
+                card.style.backgroundColor = '#3b82f6'; // Tailwind's blue-500
+            } else if (task.priorityColor) {
+                // Active tasks with priority: apply gradient
+                const priorityHex = task.priorityColor;
+                card.style.background = `linear-gradient(to right, ${originalCardColor} 0%, ${originalCardColor} 50%, ${priorityHex} 75%, ${priorityHex} 100%)`;
+            } else {
+                // Active tasks without priority: apply original gray color
+                card.style.backgroundColor = originalCardColor;
+            }
+
+            card.innerHTML = `
+                <!-- Drag handle area -->
+                <div class="drag-handle w-6 h-full flex items-center justify-center cursor-grab text-gray-300">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                </div>
+                <!-- Task content input area -->
+                <textarea class="task-content flex-grow bg-transparent text-gray-100 placeholder-gray-300 focus:outline-none resize-none overflow-hidden"
+                          placeholder="タスク内容" rows="1">${task.content}</textarea>
+                <!-- Priority button -->
+                <button class="priority-btn w-8 h-8 rounded-full bg-gray-700 flex-shrink-0 flex items-center justify-center shadow-inner transition duration-200 ease-in-out transform hover:scale-110">
+                    <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"></path></svg>
+                </button>
+            `;
+
+            const taskContentInput = card.querySelector('.task-content');
+            const priorityBtn = card.querySelector('.priority-btn');
+
+            // Adjust textarea height dynamically
+            taskContentInput.addEventListener('input', () => {
+                taskContentInput.style.height = 'auto';
+                taskContentInput.style.height = (taskContentInput.scrollHeight) + 'px';
+            });
+            // Initial height adjustment
+            setTimeout(() => {
+                taskContentInput.style.height = 'auto';
+                taskContentInput.style.height = (taskContentInput.scrollHeight) + 'px';
+            }, 0);
+
+
+            // Update task content
+            taskContentInput.addEventListener('input', (event) => {
+                const project = projects.find(p => p && p.id === currentProjectId);
+                if (project) {
+                    const taskToUpdate = project.tasks.find(t => t.id === task.id);
+                    if (taskToUpdate) {
+                        taskToUpdate.content = event.target.value;
+                        saveProjects();
+                    }
+                }
+            });
+
+            // Priority button click event
+            priorityBtn.addEventListener('click', (event) => {
+                // Adjust picker display position
+                const btnRect = priorityBtn.getBoundingClientRect();
+                priorityPicker.style.left = `${btnRect.left + btnRect.width / 2}px`;
+                priorityPicker.style.top = `${btnRect.bottom + 10}px`;
+                priorityPicker.classList.remove('hidden');
+                priorityPicker.dataset.currentTaskId = task.id; // Store task ID for color selection
+
+                // Highlight currently selected color
+                document.querySelectorAll('.priority-color-btn').forEach(btn => {
+                    btn.classList.remove('border-blue-400'); // Remove previous highlight
+                    if (btn.dataset.color === task.priorityColor) {
+                        btn.classList.add('border-blue-400'); // Add highlight
+                    }
+                });
+            });
+
+            // Variables for touch events
+            let touchStartX = 0;
+            let touchStartY = 0;
+            let isSwiping = false;
+
+            card.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                    isSwiping = false;
+                    card.style.transition = 'none'; // Disable transition during swipe
+                }
+            }, { passive: true });
+
+            card.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 1 && task.status === 'active') {
+                    const touchCurrentX = e.touches[0].clientX;
+                    const deltaX = touchCurrentX - touchStartX;
+                    const deltaY = e.touches[0].clientY - touchStartY;
+
+                    // Determine if it's primarily a horizontal swipe
+                    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) { // Threshold for swipe
+                        isSwiping = true;
+                        card.style.transform = `translateX(${deltaX}px)`;
+                    } else {
+                        isSwiping = false;
+                    }
+                }
+            }, { passive: true });
+
+            card.addEventListener('touchend', () => {
+                card.style.transition = 'transform 0.2s ease-out'; // Re-enable transition
+                if (isSwiping && task.status === 'active') {
+                    const currentTransform = card.style.transform;
+                    const translateXMatch = currentTransform.match(/translateX\(([^)]+)px\)/);
+                    const currentX = translateXMatch ? parseFloat(translateXMatch[1]) : 0;
+
+                    if (currentX < -100) { // Swipe left threshold
+                        completeTask(task.id);
+                        card.style.transform = 'translateX(-100vw)'; // Animate off screen
+                        setTimeout(() => {
+                            card.remove(); // Remove after animation
+                            renderTasks(projects.find(p => p && p.id === currentProjectId).tasks); // Re-render to update containers
+                        }, 200);
+                    } else {
+                        card.style.transform = 'translateX(0)'; // Snap back
+                    }
+                }
+                isSwiping = false;
+            });
+
+            // Drag event listeners
+            card.addEventListener('dragstart', handleTaskDragStart);
+            card.addEventListener('dragover', handleTaskDragOver);
+            card.addEventListener('dragleave', handleTaskDragLeave);
+            card.addEventListener('drop', handleTaskDrop);
+            card.addEventListener('dragend', handleTaskDragEnd);
+
+            return card;
+        }
+
+        // --- Add task ---
+        // The click event for the existing addTaskBtn is used as is
+        addTaskBtn.addEventListener('click', () => {
+            const project = projects.find(p => p && p.id === currentProjectId);
+            if (!project) return;
+
+            // If project name is empty, set a default and update icon
+            if (!project.name.trim()) {
+                project.name = '新規プロジェクト';
+                project.iconChar = '新';
+                projectNameInput.value = project.name; // Update input field
+                saveProjects();
+                renderHome();
+            }
+
+            const newTask = {
+                id: generateUniqueId(),
+                content: '',
+                priorityColor: null, // No color initially
+                status: 'active',
+                originalPriorityColor: null // Initialize new property
+            };
+            project.tasks.push(newTask);
+            saveProjects();
+            renderTasks(project.tasks); // Re-render tasks to update button visibility
+            // Focus on the new task's textarea
+            setTimeout(() => {
+                const newTaskCard = document.querySelector(`[data-task-id="${newTask.id}"] .task-content`);
+                if (newTaskCard) newTaskCard.focus();
+            }, 0);
+        });
+
+        // --- Priority picker operations ---
+        document.querySelectorAll('.priority-color-btn').forEach(btn => {
+            btn.addEventListener('click', (event) => {
+                const selectedColor = event.target.dataset.color;
+                const taskId = priorityPicker.dataset.currentTaskId;
+                const project = projects.find(p => p && p.id === currentProjectId);
+
+                if (project && taskId) {
+                    const taskToUpdate = project.tasks.find(t => t.id === taskId);
+                    if (taskToUpdate) {
+                        taskToUpdate.priorityColor = selectedColor;
+                        // If setting priority on an active task, ensure originalPriorityColor is also updated
+                        if (taskToUpdate.status === 'active') {
+                            taskToUpdate.originalPriorityColor = selectedColor;
+                        }
+                        saveProjects();
+                        renderTasks(project.tasks); // Re-render to update card color
+                    }
+                }
+                priorityPicker.classList.add('hidden');
+            });
+        });
+
+        // --- Sort tasks ---
+        sortTasksBtn.addEventListener('click', () => {
+            const project = projects.find(p => p && p.id === currentProjectId);
+            if (project) {
+                // Sort by priority (based on color definition order)
+                const sortedTasks = [...project.tasks].sort((a, b) => {
+                    const colorOrder = Object.keys(PRIORITY_COLORS);
+                    const indexA = a.priorityColor ? colorOrder.indexOf(a.priorityColor) : colorOrder.length; // No color at the end
+                    const indexB = b.priorityColor ? colorOrder.indexOf(b.priorityColor) : colorOrder.length; // No color at the end
+                    return indexA - indexB;
+                });
+                project.tasks = sortedTasks;
+                saveProjects();
+                renderTasks(project.tasks);
+                showMessage('タスクを色順にソートしました', 'success');
+            }
+        });
+
+        // --- Task drag & drop ---
+        function handleTaskDragStart(event) {
+            const card = event.currentTarget;
+            activeTaskCard = card;
+            event.dataTransfer.setData('text/plain', card.dataset.taskId);
+            event.dataTransfer.effectAllowed = 'move';
+            setTimeout(() => card.classList.add('dragging'), 0);
+        }
+
+        function handleTaskDragOver(event) {
+            event.preventDefault(); // Allow drop
+            event.dataTransfer.dropEffect = 'move';
+
+            // Remove all drag-over classes from all potential targets first
+            document.querySelectorAll('.task-card, #active-tasks-container, #completed-tasks-container').forEach(el => {
+                el.classList.remove('drag-over', 'drag-over-top', 'drag-over-bottom');
+            });
+            hideDropMessages(); // Hide drop messages from previous targets
+
+            const target = event.target.closest('.task-card, #active-tasks-container, #completed-tasks-container');
+
+            if (target && target !== activeTaskCard) {
+                if (target.classList.contains('task-card')) {
+                    // Hovering over another task card
+                    const targetRect = target.getBoundingClientRect();
+                    const targetMiddleY = targetRect.top + targetRect.height / 2;
+                    const isBefore = event.clientY < targetMiddleY;
+
+                    if (isBefore) {
+                        target.classList.add('drag-over-top');
+                    } else {
+                        target.classList.add('drag-over-bottom');
+                    }
+                } else if (target.id === 'active-tasks-container' || target.id === 'completed-tasks-container') {
+                    // Hovering over an empty container or container itself
+                    target.classList.add('drag-over');
+                    // Check if the container is actually empty of *task cards*
+                    const hasTaskCards = target.querySelector('.task-card');
+                    if (!hasTaskCards) { // Only show message if truly empty of cards
+                        showDropMessage(target.id);
+                    }
+                }
+            }
+        }
+
+        function handleTaskDragLeave(event) {
             const target = event.currentTarget;
             target.classList.remove('drag-over', 'drag-over-top', 'drag-over-bottom');
             // If leaving a container, ensure its specific drag-over class is removed
@@ -946,214 +1136,12 @@
 
         // Initial load
         document.addEventListener('DOMContentLoaded', () => {
-            // DOM element references - moved inside DOMContentLoaded
-            homeScreen = document.getElementById('home-screen');
-            taskScreen = document.getElementById('task-screen');
-            projectGrid = document.getElementById('project-grid');
-            projectNameInput = document.getElementById('project-name-input');
-            closeTaskScreenBtn = document.getElementById('close-task-screen-btn');
-            addTaskBtn = document.getElementById('add-task-btn'); // Top-right plus button
-            activeTasksContainer = document.getElementById('active-tasks-container');
-            completedTasksContainer = document.getElementById('completed-tasks-container');
-            priorityPicker = document.getElementById('priority-picker');
-            sortTasksBtn = document.getElementById('sort-tasks-btn');
-            projectContextMenu = document.getElementById('project-context-menu');
-            moveProjectBtn = document.getElementById('move-project-btn');
-            deleteProjectBtn = document.getElementById('delete-project-btn');
-            changeProjectColorBtn = document.getElementById('change-project-color-btn');
-            confirmModal = document.getElementById('confirm-modal');
-            confirmMessage = document.getElementById('confirm-message');
-            confirmYesBtn = document.getElementById('confirm-yes-btn');
-            confirmNoBtn = document.getElementById('confirm-no-btn');
-            colorPickerModal = document.getElementById('color-picker-modal');
-            projectColorGrid = document.getElementById('project-color-grid');
-            closeColorPickerModalBtn = document.getElementById('close-color-picker-modal-btn');
-            messageBox = document.getElementById('message-box');
-            appContainer = document.getElementById('app-container');
-            bottomAddTaskContainer = document.getElementById('bottom-add-task-container');
-            bottomAddTaskBtn = document.getElementById('bottom-add-task-btn');
-            activeDropMessage = document.getElementById('active-drop-message');
-            completedDropMessage = document.getElementById('completed-drop-message');
-
-            loadProjects(); // Initial load of projects
-
-            // Event Listeners - moved inside DOMContentLoaded
-            closeTaskScreenBtn.addEventListener('click', () => {
-                currentProjectId = null;
-                showScreen(homeScreen);
-                renderHome(); // Call renderHome to update task counts on project icons
-            });
-
-            projectNameInput.addEventListener('input', (event) => {
-                const projectId = event.target.dataset.projectId;
-                const project = projects.find(p => p && p.id === projectId);
-                if (project) {
-                    project.name = event.target.value;
-                    project.iconChar = event.target.value.charAt(0).toUpperCase() || '?';
-                    saveProjects();
-                    renderHome(); // Update icon on home screen
-                }
-            });
-
-            addTaskBtn.addEventListener('click', () => {
-                const project = projects.find(p => p && p.id === currentProjectId);
-                if (!project) return;
-
-                if (!project.name.trim()) {
-                    project.name = '新規プロジェクト';
-                    project.iconChar = '新';
-                    projectNameInput.value = project.name;
-                    saveProjects();
-                    renderHome();
-                }
-
-                const newTask = {
-                    id: generateUniqueId(),
-                    content: '',
-                    priorityColor: null,
-                    status: 'active',
-                    originalPriorityColor: null
-                };
-                project.tasks.push(newTask);
-                saveProjects();
-                renderTasks(project.tasks);
-                setTimeout(() => {
-                    const newTaskCard = document.querySelector(`[data-task-id="${newTask.id}"] .task-content`);
-                    if (newTaskCard) newTaskCard.focus();
-                }, 0);
-            });
-
-            bottomAddTaskBtn.addEventListener('click', () => {
-                addTaskBtn.click();
-            });
-
-            // Event listener for priority color buttons (inside priority picker)
-            document.querySelectorAll('.priority-color-btn').forEach(btn => {
-                btn.addEventListener('click', (event) => {
-                    const selectedColor = event.target.dataset.color;
-                    const taskId = priorityPicker.dataset.currentTaskId;
-                    const project = projects.find(p => p && p.id === currentProjectId);
-
-                    if (project && taskId) {
-                        const taskToUpdate = project.tasks.find(t => t.id === taskId);
-                        if (taskToUpdate) {
-                            taskToUpdate.priorityColor = selectedColor;
-                            if (taskToUpdate.status === 'active') {
-                                taskToUpdate.originalPriorityColor = selectedColor;
-                            }
-                            saveProjects();
-                            renderTasks(project.tasks);
-                        }
-                    }
-                    priorityPicker.classList.add('hidden');
-                });
-            });
-
-            sortTasksBtn.addEventListener('click', () => {
-                const project = projects.find(p => p && p.id === currentProjectId);
-                if (project) {
-                    const sortedTasks = [...project.tasks].sort((a, b) => {
-                        const colorOrder = Object.keys(PRIORITY_COLORS);
-                        const indexA = a.priorityColor ? colorOrder.indexOf(a.priorityColor) : colorOrder.length;
-                        const indexB = b.priorityColor ? colorOrder.indexOf(b.priorityColor) : colorOrder.length;
-                        return indexA - indexB;
-                    });
-                    project.tasks = sortedTasks;
-                    saveProjects();
-                    renderTasks(project.tasks);
-                    showMessage('タスクを色順にソートしました', 'success');
-                }
-            });
-
-            moveProjectBtn.addEventListener('click', () => {
-                isMovingProjects = true;
-                projectContextMenu.classList.add('hidden');
-                renderHome();
-                showMessage('プロジェクトをドラッグ＆ドロップで入れ替えてください', 'info', 5000);
-            });
-
-            deleteProjectBtn.addEventListener('click', () => {
-                const projectIdToDelete = projectContextMenu.dataset.projectId;
-                if (!projectIdToDelete) return;
-
-                projectContextMenu.classList.add('hidden');
-                confirmMessage.textContent = '本当にこのプロジェクトを削除しますか？';
-                showModal(confirmModal);
-
-                confirmYesBtn.onclick = () => {
-                    const indexToDelete = projects.findIndex(p => p && p.id === projectIdToDelete);
-                    if (indexToDelete !== -1) {
-                        projects[indexToDelete] = null;
-                        saveProjects();
-                        renderHome();
-                        showMessage('プロジェクトを削除しました', 'success');
-                    }
-                    hideModal(confirmModal);
-                };
-
-                confirmNoBtn.onclick = () => {
-                    hideModal(confirmModal);
-                };
-            });
-
-            changeProjectColorBtn.addEventListener('click', () => {
-                const projectIdToChangeColor = projectContextMenu.dataset.projectId;
-                if (!projectIdToChangeColor) return;
-
-                projectContextMenu.classList.add('hidden');
-                showModal(colorPickerModal);
-
-                projectColorGrid.innerHTML = '';
-                PROJECT_ICON_COLORS.forEach(color => {
-                    const button = document.createElement('button');
-                    button.classList.add('w-12', 'h-12', 'rounded-full', 'shadow-md', 'transition', 'duration-150', 'ease-in-out', 'transform', 'hover:scale-110', 'border-2', 'border-transparent');
-                    button.style.backgroundColor = color;
-                    button.dataset.color = color;
-                    button.addEventListener('click', () => {
-                        const project = projects.find(p => p && p.id === projectIdToChangeColor);
-                        if (project) {
-                            project.color = color;
-                            saveProjects();
-                            renderHome();
-                            showMessage('プロジェクトの色を変更しました', 'success');
-                        }
-                        hideModal(colorPickerModal);
-                    });
-                    projectColorGrid.appendChild(button);
-                });
-            });
-
-            closeColorPickerModalBtn.addEventListener('click', () => {
-                hideModal(colorPickerModal);
-            });
-
-            // Global click handler
-            document.addEventListener('click', (event) => {
-                if (!projectContextMenu.classList.contains('hidden') && !projectContextMenu.contains(event.target) && !event.target.closest('.project-cell')) {
-                    projectContextMenu.classList.add('hidden');
-                }
-
-                if (!priorityPicker.classList.contains('hidden') && !priorityPicker.contains(event.target) && !event.target.closest('.priority-btn')) {
-                    priorityPicker.classList.add('hidden');
-                }
-
-                if (isMovingProjects) {
-                    const clickedProjectCell = event.target.closest('.project-cell');
-                    const clickedContextMenuButton = event.target.closest('.context-menu-btn');
-
-                    if (!clickedProjectCell && !clickedContextMenuButton) {
-                        isMovingProjects = false;
-                        renderHome();
-                        showMessage('プロジェクト移動モードを終了しました', 'info');
-                    }
-                }
-            });
+            loadProjects();
         });
 
         // Re-render home screen on window resize to adjust layout
         window.addEventListener('resize', () => {
-            // Ensure homeScreen is defined before accessing its classList
-            if (homeScreen && homeScreen.classList.contains('fade-enter-to')) {
+            if (homeScreen.classList.contains('fade-enter-to')) {
                 renderHome();
             }
         });
