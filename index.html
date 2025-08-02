@@ -4,14 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>タスク管理アプリ</title>
-    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <style>
         body {
             font-family: 'Inter', sans-serif;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
+        }
+        /* Custom font size for project name to fit smaller icons */
+        .text-\[10px\] {
+            font-size: 10px;
         }
         /* Custom scrollbar for dark mode */
         ::-webkit-scrollbar {
@@ -49,7 +53,7 @@
         .drag-over {
             /* For containers (active-tasks-container, completed-tasks-container) */
             border: 2px dashed #9ca3af; /* Gray-400 dashed border */
-            background-color: #3b4352; /* Slightly lighter dark background for drag over */
+            background-color: #4a5568; /* Medium gray (変更後の色) */
         }
         .drag-over-top {
             /* For task cards: indicates insertion before this card */
@@ -65,6 +69,47 @@
         .project-cell.highlight {
             border: 2px solid #6366f1; /* Highlight for move mode */
         }
+        /* Task card wrapper styles */
+        .task-card-wrapper.wrapper-dragging {
+            z-index: 20;
+        }
+        /* ▼▼▼ 追加: ダミーのドロップゾーンのスタイル ▼▼▼ */
+        .dummy-drop-zone {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 80px; /* ドロップターゲットとして十分な高さを確保 */
+            border: 2px dashed #4a5568; /* 枠線を点線に */
+            border-radius: 0.5rem; /* 角を丸くする */
+            color: #6b7280; /* テキストの色を薄くする */
+            transition: all 0.2s ease-in-out;
+        }
+        /* ▲▲▲ 追加ここまで ▲▲▲ */
+        .task-delete-overlay, .task-complete-overlay {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            padding: 0 1rem;
+            font-weight: bold;
+            font-size: 1.5rem;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .task-delete-overlay {
+            right: 0;
+            justify-content: flex-end;
+            color: #ef4444; /* red-500 */
+        }
+        .task-complete-overlay {
+            left: 0;
+            justify-content: flex-start;
+            color: #06b6d4; /* cyan-500 */
+        }
 
         /* Hide specific elements when printing */
         @media print {
@@ -76,18 +121,14 @@
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
 
-    <!-- Main container -->
-    <div id="app-container" class="relative w-full max-w-4xl bg-gray-800 rounded-xl shadow-2xl p-6 flex flex-col overflow-hidden" style="min-height: 700px;">
+    <div id="app-container" class="relative w-full max-w-4xl bg-gray-800 rounded-xl shadow-2xl p-6 flex flex-col" style="min-height: 700px;">
 
-        <!-- Home screen -->
         <div id="home-screen" class="absolute inset-0 flex flex-col p-6 fade-enter-active fade-enter-to">
             <h1 class="text-3xl font-bold mb-8 text-center text-indigo-400">プロジェクト</h1>
-            <div id="project-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 flex-grow overflow-y-auto pb-4">
-                <!-- Project cells will be dynamically generated here -->
-            </div>
+            <div id="project-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 pb-4">
+                </div>
         </div>
 
-        <!-- Task screen -->
         <div id="task-screen" class="absolute inset-0 flex flex-col p-6 bg-gray-800 fade-leave-to opacity-0 pointer-events-none">
             <div class="flex justify-between items-center mb-6">
                 <input type="text" id="project-name-input" placeholder="プロジェクト名"
@@ -101,55 +142,40 @@
             </div>
 
             <div class="flex-grow overflow-y-auto pr-2">
-                <!-- Task management box -->
                 <div class="mb-6">
                     <div class="flex justify-between items-center bg-gray-700 p-3 rounded-t-lg shadow-inner">
-                        <h2 class="text-xl font-semibold text-indigo-300">タスク管理</h2>
+                        <h2 class="text-xl font-semibold text-indigo-300">タスク管理 <span id="active-tasks-count" class="text-sm font-medium text-indigo-200 ml-2">0</span></h2>
                         <button id="add-task-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-md transition duration-200 ease-in-out transform hover:scale-110">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
                         </button>
                     </div>
                     <div id="active-tasks-container" class="bg-gray-700 p-4 rounded-b-lg min-h-[150px] space-y-3 shadow-lg relative">
-                        <!-- Active task cards will be dynamically added here -->
+                        <p id="no-active-tasks-message" class="text-gray-400 text-center py-4 hidden">アクティブなタスクはありません。</p>
                         <p id="active-drop-message" class="absolute inset-0 flex items-center justify-center text-gray-400 text-lg hidden pointer-events-none">ここにドロップ</p>
-                    </div>
-                    <!-- Moved bottom-add-task-container outside active-tasks-container -->
-                    <div id="bottom-add-task-container" class="mt-4 hidden justify-center">
-                        <button id="bottom-add-task-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white rounded-full w-10 h-10 flex items-center justify-center shadow-md transition duration-200 ease-in-out transform hover:scale-110">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-                        </button>
                     </div>
                 </div>
 
-                <!-- Completed box -->
                 <div>
-                    <h2 class="text-xl font-semibold text-green-300 bg-gray-700 p-3 rounded-t-lg shadow-inner">完了</h2>
+                    <div class="flex justify-between items-center bg-gray-700 p-3 rounded-t-lg shadow-inner">
+                        <h2 class="text-xl font-semibold text-green-300">完了 <span id="completed-tasks-count" class="text-sm font-medium text-green-200 ml-2">0</span></h2>
+                    </div>
                     <div id="completed-tasks-container" class="bg-gray-700 p-4 rounded-b-lg min-h-[100px] space-y-3 shadow-lg relative">
-                        <!-- Completed task cards will be dynamically added here -->
+                        <p id="no-completed-tasks-message" class="text-gray-400 text-center py-4 hidden">完了したタスクはありません。</p>
                         <p id="completed-drop-message" class="absolute inset-0 flex items-center justify-center text-gray-400 text-lg hidden pointer-events-none">ここにドロップ</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Priority picker window -->
-        <div id="priority-picker" class="absolute bg-gray-700 p-2 rounded-lg shadow-xl z-20 hidden flex-wrap gap-2" style="transform: translate(-50%, 0);">
-            <button class="priority-color-btn w-8 h-8 rounded-full border-2 border-transparent transition duration-150 ease-in-out" data-color="#8b5cf6" style="background-color: #8b5cf6;"></button> <!-- Purple -->
-            <button class="priority-color-btn w-8 h-8 rounded-full border-2 border-transparent transition duration-150 ease-in-out" data-color="#ef4444" style="background-color: #ef4444;"></button> <!-- Red -->
-            <button class="priority-color-btn w-8 h-8 rounded-full border-2 border-transparent transition duration-150 ease-in-out" data-color="#f97316" style="background-color: #f97316;"></button> <!-- Orange -->
-            <button class="priority-color-btn w-8 h-8 rounded-full border-2 border-transparent transition duration-150 ease-in-out" data-color="#facc15" style="background-color: #facc15;"></button> <!-- Yellow -->
-            <button class="priority-color-btn w-8 h-8 rounded-full border-2 border-transparent transition duration-150 ease-in-out" data-color="#22c55e" style="background-color: #22c55e;"></button> <!-- Green -->
-            <button class="priority-color-btn w-8 h-8 rounded-full border-2 border-transparent transition duration-150 ease-in-out" data-color="#3b82f6" style="background-color: #3b82f6;"></button> <!-- Blue -->
-        </div>
+        <div id="priority-picker" class="absolute bg-gray-700 p-2 rounded-lg shadow-xl z-20 hidden flex-wrap gap-2">
+            <button class="priority-color-btn w-8 h-8 rounded-full border-2 border-transparent transition duration-150 ease-in-out" data-color="#8b5cf6" style="background-color: #8b5cf6;"></button> <button class="priority-color-btn w-8 h-8 rounded-full border-2 border-transparent transition duration-150 ease-in-out" data-color="#ef4444" style="background-color: #ef4444;"></button> <button class="priority-color-btn w-8 h-8 rounded-full border-2 border-transparent transition duration-150 ease-in-out" data-color="#f97316" style="background-color: #f97316;"></button> <button class="priority-color-btn w-8 h-8 rounded-full border-2 border-transparent transition duration-150 ease-in-out" data-color="#facc15" style="background-color: #facc15;"></button> <button class="priority-color-btn w-8 h-8 rounded-full border-2 border-transparent transition duration-150 ease-in-out" data-color="#22c55e" style="background-color: #22c55e;"></button> <button class="priority-color-btn w-8 h-8 rounded-full border-2 border-transparent transition duration-150 ease-in-out" data-color="#4a5568" style="background-color: #4a5568;"></button> <button class="priority-color-btn w-8 h-8 rounded-full border-2 border-transparent transition duration-150 ease-in-out" data-color="#3b82f6" style="background-color: #3b82f6;"></button> </div>
 
-        <!-- Project context menu -->
-        <div id="project-context-menu" class="absolute bg-gray-700 p-2 rounded-lg shadow-xl z-20 hidden flex-col gap-2">
+        <div id="project-context-menu" class="absolute bg-gray-700 p-2 rounded-lg shadow-xl z-20 hidden flex flex-col gap-2">
             <button id="move-project-btn" class="context-menu-btn bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded-lg transition duration-200">入れ替え</button>
             <button id="delete-project-btn" class="context-menu-btn bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg transition duration-200">削除</button>
             <button id="change-project-color-btn" class="context-menu-btn bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg transition duration-200">色変更</button>
         </div>
 
-        <!-- Confirmation modal -->
         <div id="confirm-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden fade-leave-to opacity-0 pointer-events-none">
             <div class="bg-gray-700 p-8 rounded-lg shadow-xl text-center max-w-sm w-full">
                 <p id="confirm-message" class="text-lg text-gray-100 mb-6">本当に削除しますか？</p>
@@ -160,18 +186,15 @@
             </div>
         </div>
 
-        <!-- Color picker modal -->
         <div id="color-picker-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden fade-leave-to opacity-0 pointer-events-none">
             <div class="bg-gray-700 p-8 rounded-lg shadow-xl text-center max-w-md w-full">
                 <h2 class="text-2xl font-bold text-indigo-400 mb-6">プロジェクトアイコンの色を変更</h2>
                 <div id="project-color-grid" class="grid grid-cols-4 gap-4 mb-6">
-                    <!-- Color selection buttons will be dynamically generated here -->
-                </div>
+                    </div>
                 <button id="close-color-picker-modal-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition duration-200 ease-in-out transform hover:scale-105">閉じる</button>
             </div>
         </div>
 
-        <!-- Message box -->
         <div id="message-box" class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 hidden opacity-0 transition-opacity duration-300">
             メッセージ
         </div>
@@ -204,10 +227,14 @@
         const messageBox = document.getElementById('message-box');
         const appContainer = document.getElementById('app-container');
         // New DOM element references
-        const bottomAddTaskContainer = document.getElementById('bottom-add-task-container');
-        const bottomAddTaskBtn = document.getElementById('bottom-add-task-btn');
         const activeDropMessage = document.getElementById('active-drop-message');
         const completedDropMessage = document.getElementById('completed-drop-message');
+        // タスクなしメッセージのDOM要素
+        const noActiveTasksMessage = document.getElementById('no-active-tasks-message');
+        const noCompletedTasksMessage = document.getElementById('no-completed-tasks-message');
+        // 変更: タスク数を表示するためのDOM要素
+        const activeTasksCountSpan = document.getElementById('active-tasks-count');
+        const completedTasksCountSpan = document.getElementById('completed-tasks-count');
 
 
         // Application state
@@ -219,19 +246,22 @@
         let isMovingProjects = false; // Project move mode flag
 
         // Constants
-        const NUM_PROJECT_CELLS = 12;
+        const NUM_PROJECT_CELLS = 24; // Changed from 12 to 24 for a larger grid
+        // 修正: ソート順を紫が上になるように変更
         const PRIORITY_COLORS = {
-            '#8b5cf6': 'bg-purple-400', // Purple (slightly lighter)
-            '#ef4444': 'bg-red-400',    // Red (slightly lighter)
-            '#f97316': 'bg-orange-400', // Orange (slightly lighter)
-            '#facc15': 'bg-yellow-400', // Yellow (slightly lighter)
-            '#22c55e': 'bg-green-400',  // Green (slightly lighter)
-            '#3b82f6': 'bg-blue-400'    // Blue (slightly lighter)
+            '#8b5cf6': 'bg-purple-400', // Purple
+            '#ef4444': 'bg-red-400',    // Red
+            '#f97316': 'bg-orange-400', // Orange
+            '#facc15': 'bg-yellow-400', // Yellow
+            '#22c55e': 'bg-green-400',  // Green
+            '#3b82f6': 'bg-blue-400'    // Blue
         };
         const PROJECT_ICON_COLORS = [
             '#6366f1', '#a855f7', '#ec4899', '#f43f5e', '#ef4444', '#f97316',
-            '#facc15', '#eab308', '#84cc16', '#22c55e', '#06b6d4', '#3b82f6'
-        ]; // Tailwind indigo-500, purple-500, pink-500, rose-500, red-500, orange-500, yellow-500, amber-500, lime-500, green-500, cyan-500, blue-500
+            '#facc15', '#eab308', '#84cc16', '#22c55e', '#06b6d4', '#3b82f6',
+            '#8b5cf6', '#dc2626', '#f59e0b', '#10b981', '#0ea5e9', '#6366f1',
+            '#7e22ce', '#db2777', '#be123c', '#d97706', '#ca8a04', '#15803d'
+        ]; // Expanded color palette
 
         // Helper functions
         function generateUniqueId() {
@@ -362,24 +392,25 @@
 
                     // Project name and icon character
                     const projectContent = document.createElement('div');
-                    // Changed icon character size to text-4xl
+                    // Changed icon character size to text-xl and project name to a custom 10px size
                     projectContent.classList.add('flex', 'flex-col', 'items-center', 'justify-center', 'flex-grow');
                     projectContent.innerHTML = `
-                        <span class="text-4xl font-bold text-white uppercase select-none">${project.iconChar}</span>
-                        <span class="text-xs font-medium text-white opacity-75 mt-1">${project.name}</span>
+                        <span class="text-xl font-bold text-white uppercase select-none">${project.iconChar}</span>
+                        <span class="text-[10px] font-medium text-white opacity-75 mt-1">${project.name}</span>
                     `;
                     cell.appendChild(projectContent);
 
                     // Task count squares container
                     const taskSquaresContainer = document.createElement('div');
-                    // Changed bottom-2 to bottom-1, adjusted gap and padding
-                    taskSquaresContainer.classList.add('absolute', 'bottom-1', 'left-1', 'right-1', 'flex', 'flex-wrap', 'gap-0.5', 'justify-start', 'max-h-[40px]', 'overflow-hidden', 'p-0.5'); // gap and padding adjusted
+                    // Changed max-h and adjusted padding/gap for smaller squares
+                    taskSquaresContainer.classList.add('absolute', 'bottom-1', 'left-1', 'right-1', 'flex', 'flex-wrap', 'gap-0.5', 'justify-start', 'max-h-[30px]', 'overflow-hidden', 'p-0.5');
 
                     // Add squares for each task
                     const activeTasksCount = project.tasks.filter(t => t.status === 'active').length;
                     for (let j = 0; j < activeTasksCount; j++) {
                         const square = document.createElement('div');
-                        square.classList.add('w-[15px]', 'h-[15px]', 'bg-white', 'rounded-sm', 'flex-shrink-0');
+                        // Changed task square size
+                        square.classList.add('w-[10px]', 'h-[10px]', 'bg-white', 'rounded-sm', 'flex-shrink-0');
                         taskSquaresContainer.appendChild(square);
                     }
                     cell.appendChild(taskSquaresContainer);
@@ -392,7 +423,7 @@
                 } else {
                     cell.classList.add('bg-gray-700', 'hover:bg-gray-600', 'border-2', 'border-dashed', 'border-gray-600');
                     cell.innerHTML = `
-                        <svg class="w-12 h-12 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                        <svg class="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
                     `;
                 }
 
@@ -411,15 +442,19 @@
                 cell.removeEventListener('mousedown', handleProjectCellLongPressStart);
                 cell.removeEventListener('mouseup', handleProjectCellLongPressEnd);
                 cell.removeEventListener('mouseleave', handleProjectCellLongPressEnd);
+                cell.removeEventListener('contextmenu', handleProjectCellContextMenu); // 新規: contextmenuリスナーを削除
 
                 // Add new listeners
                 cell.addEventListener('click', handleProjectCellClick);
+                // The third argument of addEventListener ({ passive: true }) is for performance optimization on touch events
                 cell.addEventListener('touchstart', handleProjectCellLongPressStart, { passive: true });
                 cell.addEventListener('touchend', handleProjectCellLongPressEnd);
                 cell.addEventListener('touchcancel', handleProjectCellLongPressEnd);
                 cell.addEventListener('mousedown', handleProjectCellLongPressStart);
                 cell.addEventListener('mouseup', handleProjectCellLongPressEnd);
                 cell.addEventListener('mouseleave', handleProjectCellLongPressEnd);
+                // 新規: PCでの右クリック用イベントリスナーを追加
+                cell.addEventListener('contextmenu', handleProjectCellContextMenu);
 
                 // Drag and drop for project cells (only if moving projects)
                 if (isMovingProjects) {
@@ -465,6 +500,7 @@
             }
         }
 
+        // --- FIXED: Pass the element reference to the timeout to avoid null errors ---
         function handleProjectCellLongPressStart(event) {
             // Do not open menu if in project move mode
             if (isMovingProjects) {
@@ -474,42 +510,79 @@
 
             const cell = event.currentTarget;
             const projectId = cell.dataset.projectId;
-            if (!projectId) return; // Only for existing projects
+            // 既存のプロジェクトアイコンのみ長押しを有効にする
+            if (!projectId) return;
 
             clearTimeout(longPressTimer);
+            // Capture the element in a variable to ensure it's not null when the timer fires
+            const targetElement = event.currentTarget;
             longPressTimer = setTimeout(() => {
-                // Pass the cell element directly instead of the event object
-                openProjectContextMenu(projectId, cell);
-            }, 800); // 0.8 second long press
+                // Pass the captured element reference
+                openProjectContextMenu(projectId, targetElement);
+            }, 300); // 0.3 second long press
         }
 
         function handleProjectCellLongPressEnd() {
             clearTimeout(longPressTimer);
         }
 
-        // Modified to accept cellElement directly
-        function openProjectContextMenu(projectId, cellElement) {
+        // 新規: 右クリックメニュー表示のハンドラ
+        function handleProjectCellContextMenu(event) {
+            event.preventDefault(); // ブラウザのデフォルトメニューを非表示にする
+            const cell = event.currentTarget;
+            const projectId = cell.dataset.projectId;
+            if (projectId && !isMovingProjects) {
+                // 長押しと同じ処理を呼び出す
+                openProjectContextMenu(projectId, cell);
+            }
+        }
+
+        // Modified: Use event target to get coordinates from the element itself
+        function openProjectContextMenu(projectId, targetElement) {
             const project = projects.find(p => p && p.id === projectId);
             if (!project) return;
+            // The check below is a safeguard against the original error, though the fix above should prevent it.
+            if (!targetElement) return;
 
             // Store the project ID for context menu actions
             projectContextMenu.dataset.projectId = projectId;
 
-            // Position the context menu next to the cell
-            const cellRect = cellElement.getBoundingClientRect(); // Use cellElement directly
-            projectContextMenu.style.left = `${cellRect.right + 10}px`;
-            projectContextMenu.style.top = `${cellRect.top}px`;
-
-            // Adjust position if it goes off screen
-            const appContainerRect = appContainer.getBoundingClientRect();
-            if (parseFloat(projectContextMenu.style.left) + projectContextMenu.offsetWidth > appContainerRect.right) {
-                projectContextMenu.style.left = `${cellRect.left - projectContextMenu.offsetWidth - 10}px`;
-            }
-            if (parseFloat(projectContextMenu.style.top) + projectContextMenu.offsetHeight > appContainerRect.bottom) {
-                projectContextMenu.style.top = `${appContainerRect.bottom - projectContextMenu.offsetHeight}px`;
-            }
-
+            // 修正: まず'hidden'クラスを削除して、要素の幅を正確に取得できるようにする
             projectContextMenu.classList.remove('hidden');
+
+            // Get the bounding rectangle of the target element (the project icon)
+            const targetRect = targetElement.getBoundingClientRect();
+            const appContainerRect = appContainer.getBoundingClientRect();
+
+            // Get the number of columns dynamically
+            const computedStyle = window.getComputedStyle(projectGrid);
+            const gridTemplateColumns = computedStyle.getPropertyValue('grid-template-columns');
+            const numColumns = gridTemplateColumns.split(' ').length;
+            const targetIndex = parseInt(targetElement.dataset.index, 10);
+
+            let menuLeft;
+            // Check if the element is in the rightmost column
+            if ((targetIndex + 1) % numColumns === 0) {
+                // Position menu to the left of the icon
+                // menuLeft = アイコンの左端 - 親コンテナの左端 - メニューの幅 - オフセット
+                menuLeft = targetRect.left - appContainerRect.left - projectContextMenu.offsetWidth - 5;
+            } else {
+                // Position menu to the right of the icon (default)
+                // menuLeft = アイコンの右端 - 親コンテナの左端 + オフセット
+                menuLeft = targetRect.right - appContainerRect.left + 5;
+            }
+
+            // Calculate menu top position (aligned with the icon's top)
+            let menuTop = targetRect.top - appContainerRect.top;
+
+            // Adjust position if it goes off screen at the bottom
+            if (menuTop + projectContextMenu.offsetHeight > appContainer.offsetHeight) {
+                menuTop = appContainer.offsetHeight - projectContextMenu.offsetHeight;
+            }
+
+            // Apply the new position
+            projectContextMenu.style.left = `${menuLeft}px`;
+            projectContextMenu.style.top = `${menuTop}px`;
         }
 
         // --- Project move mode ---
@@ -532,36 +605,9 @@
         function handleProjectDragOver(event) {
             event.preventDefault(); // Allow drop
             event.dataTransfer.dropEffect = 'move';
-
-            // Remove all drag-over classes from all potential targets first
-            document.querySelectorAll('.task-card, #active-tasks-container, #completed-tasks-container').forEach(el => {
-                el.classList.remove('drag-over', 'drag-over-top', 'drag-over-bottom');
-            });
-            hideDropMessages(); // Hide drop messages from previous targets
-
-            const target = event.target.closest('.task-card, #active-tasks-container, #completed-tasks-container');
-
-            if (target && target !== activeTaskCard) {
-                if (target.classList.contains('task-card')) {
-                    // Hovering over another task card
-                    const targetRect = target.getBoundingClientRect();
-                    const targetMiddleY = targetRect.top + targetRect.height / 2;
-                    const isBefore = event.clientY < targetMiddleY;
-
-                    if (isBefore) {
-                        target.classList.add('drag-over-top');
-                    } else {
-                        target.classList.add('drag-over-bottom');
-                    }
-                } else if (target.id === 'active-tasks-container' || target.id === 'completed-tasks-container') {
-                    // Hovering over an empty container or container itself
-                    target.classList.add('drag-over');
-                    // Check if the container is actually empty of *task cards*
-                    const hasTaskCards = target.querySelector('.task-card');
-                    if (!hasTaskCards) { // Only show message if truly empty of cards
-                        showDropMessage(target.id);
-                    }
-                }
+            const targetCell = event.target.closest('.project-cell');
+            if (targetCell && targetCell !== activeProjectCell) {
+                targetCell.classList.add('drag-over');
             }
         }
 
@@ -671,7 +717,6 @@
         }
 
         closeTaskScreenBtn.addEventListener('click', () => {
-            currentProjectId = null;
             showScreen(homeScreen);
             renderHome(); // Call renderHome to update task counts on project icons
         });
@@ -681,8 +726,9 @@
             const projectId = event.target.dataset.projectId;
             const project = projects.find(p => p && p.id === projectId);
             if (project) {
+                // Modified to use .at(0) for correct handling of multi-byte characters like emoji
                 project.name = event.target.value;
-                project.iconChar = event.target.value.charAt(0).toUpperCase() || '?';
+                project.iconChar = event.target.value.at(0) || '?';
                 saveProjects();
                 renderHome(); // Update icon on home screen
             }
@@ -690,53 +736,98 @@
 
         // --- Task rendering ---
         function renderTasks(tasks) {
-            console.log("--- renderTasks called for project:", currentProjectId, "---"); // Debug log
-            const currentProject = projects.find(p => p && p.id === currentProjectId);
-            if (currentProject) {
-                console.log("Current project tasks state BEFORE rendering:", JSON.parse(JSON.stringify(currentProject.tasks))); // Debug log
-            }
-
+            // コンテナの中身をすべてクリア
             activeTasksContainer.innerHTML = '';
             completedTasksContainer.innerHTML = '';
 
             const activeTasks = tasks.filter(task => task.status === 'active');
             const completedTasks = tasks.filter(task => task.status === 'completed');
 
-            console.log("Active tasks to render:", JSON.parse(JSON.stringify(activeTasks))); // Debug log
-            console.log("Completed tasks to render:", JSON.parse(JSON.stringify(completedTasks))); // Debug log
+            // タスク数を更新
+            activeTasksCountSpan.textContent = activeTasks.length;
+            completedTasksCountSpan.textContent = completedTasks.length;
 
+            // ▼▼▼ 変更点: アクティブタスクの表示ロジックをダミー要素対応に修正 ▼▼▼
             if (activeTasks.length === 0) {
-                activeTasksContainer.innerHTML = '<p class="text-gray-400 text-center py-4">アクティブなタスクはありません。</p>';
+                noActiveTasksMessage.classList.add('hidden');
+                const dummy = document.createElement('div');
+                dummy.classList.add('dummy-drop-zone');
+                dummy.textContent = 'ここにドラッグ＆ドロップ';
+                activeTasksContainer.appendChild(dummy);
             } else {
-                activeTasks.forEach(task => activeTasksContainer.appendChild(createTaskCard(task)));
+                noActiveTasksMessage.classList.add('hidden');
+                activeTasks.forEach(task => {
+                    activeTasksContainer.appendChild(createTaskCard(task));
+                });
+                if (activeTasks.length >= 3) {
+                    const addButtonContainer = document.createElement('div');
+                    addButtonContainer.classList.add('mt-4', 'flex', 'justify-center');
+                    const addButton = document.createElement('button');
+                    addButton.id = 'bottom-add-task-btn';
+                    addButton.classList.add('bg-indigo-500', 'hover:bg-indigo-600', 'text-white', 'rounded-full', 'w-10', 'h-10', 'flex', 'items-center', 'justify-center', 'shadow-md', 'transition', 'duration-200', 'ease-in-out', 'transform', 'hover:scale-110');
+                    addButton.innerHTML = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>`;
+                    addButton.addEventListener('click', addNewTask);
+                    addButtonContainer.appendChild(addButton);
+                    activeTasksContainer.appendChild(addButtonContainer);
+                }
             }
+            // ▲▲▲ 変更点ここまで ▲▲▲
 
-            // Show bottom add button if 3 or more tasks
-            if (activeTasks.length >= 3) {
-                bottomAddTaskContainer.classList.remove('hidden');
-                bottomAddTaskContainer.classList.add('flex'); // Add flex to enable centering
-            } else {
-                bottomAddTaskContainer.classList.add('hidden');
-                bottomAddTaskContainer.classList.remove('flex');
-            }
-            // bottomAddTaskContainer is now outside activeTasksContainer, so no need to append it here.
-
-
+            // ▼▼▼ 変更点: 完了タスクの表示ロジックをダミー要素対応に修正 ▼▼▼
             if (completedTasks.length === 0) {
-                completedTasksContainer.innerHTML = '<p class="text-gray-400 text-center py-4">完了したタスクはありません。</p>';
+                noCompletedTasksMessage.classList.add('hidden');
+                const dummy = document.createElement('div');
+                dummy.classList.add('dummy-drop-zone');
+                dummy.textContent = 'ここにドラッグ＆ドロップ';
+                completedTasksContainer.appendChild(dummy);
             } else {
+                noCompletedTasksMessage.classList.add('hidden');
                 completedTasks.forEach(task => completedTasksContainer.appendChild(createTaskCard(task)));
             }
-            console.log("--- renderTasks finished ---"); // Debug log
+            // ▲▲▲ 変更点ここまで ▲▲▲
         }
 
-        // Make bottomAddTaskBtn have the same functionality as addTaskBtn
-        bottomAddTaskBtn.addEventListener('click', () => {
-            addTaskBtn.click(); // Trigger click event of existing addTaskBtn
-        });
+        // A function to add a new task
+        function addNewTask() {
+            const project = projects.find(p => p && p.id === currentProjectId);
+            if (!project) return;
+
+            // If project name is empty, set a default and update icon
+            if (!project.name.trim()) {
+                project.name = '新規プロジェクト';
+                project.iconChar = '新';
+                projectNameInput.value = project.name; // Update input field
+                saveProjects();
+                renderHome();
+            }
+
+            const newTask = {
+                id: generateUniqueId(),
+                content: '',
+                priorityColor: null, // No color initially
+                status: 'active',
+                originalPriorityColor: null // Initialize new property
+            };
+            project.tasks.push(newTask);
+            saveProjects();
+            renderTasks(project.tasks); // Re-render tasks to update button visibility
+            // Focus on the new task's textarea
+            setTimeout(() => {
+                const newTaskCard = document.querySelector(`[data-task-id="${newTask.id}"] .task-content`);
+                if (newTaskCard) newTaskCard.focus();
+            }, 0);
+        }
+
+        // Event listener for the top-right plus button
+        addTaskBtn.addEventListener('click', addNewTask);
 
 
         function createTaskCard(task) {
+            // タスクカード全体をラップするコンテナ
+            const cardWrapper = document.createElement('div');
+            cardWrapper.classList.add('task-card-wrapper');
+            cardWrapper.dataset.taskId = task.id;
+
             const card = document.createElement('div');
             // Removed bg-gray-600 class to allow custom background style
             card.classList.add('task-card', 'relative', 'p-3', 'rounded-lg', 'shadow-md', 'flex', 'items-center', 'space-x-3', 'cursor-grab', 'transition', 'duration-200', 'ease-in-out', 'transform', 'hover:scale-[1.01]', 'active:scale-100');
@@ -759,18 +850,30 @@
             }
 
             card.innerHTML = `
-                <!-- Drag handle area -->
                 <div class="drag-handle w-6 h-full flex items-center justify-center cursor-grab text-gray-300">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
                 </div>
-                <!-- Task content input area -->
                 <textarea class="task-content flex-grow bg-transparent text-gray-100 placeholder-gray-300 focus:outline-none resize-none overflow-hidden"
                           placeholder="タスク内容" rows="1">${task.content}</textarea>
-                <!-- Priority button -->
                 <button class="priority-btn w-8 h-8 rounded-full bg-gray-700 flex-shrink-0 flex items-center justify-center shadow-inner transition duration-200 ease-in-out transform hover:scale-110">
-                    <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"></path></svg>
+                    <i class="fas fa-paint-brush text-gray-300"></i>
                 </button>
             `;
+
+            // タスクカードのラッパーに削除アイコンと完了アイコンを追加
+            const deleteOverlay = document.createElement('div');
+            deleteOverlay.classList.add('task-delete-overlay');
+            deleteOverlay.innerHTML = `<i class="fas fa-trash-alt text-red-500 mr-2"></i><span>削除</span>`;
+
+            const completeOverlay = document.createElement('div');
+            completeOverlay.classList.add('task-complete-overlay');
+            completeOverlay.innerHTML = `<span>完了</span><i class="fas fa-check text-cyan-500 ml-2"></i>`;
+
+
+            cardWrapper.appendChild(deleteOverlay);
+            cardWrapper.appendChild(completeOverlay);
+            cardWrapper.appendChild(card);
+
 
             const taskContentInput = card.querySelector('.task-content');
             const priorityBtn = card.querySelector('.priority-btn');
@@ -801,11 +904,24 @@
 
             // Priority button click event
             priorityBtn.addEventListener('click', (event) => {
-                // Adjust picker display position
-                const btnRect = priorityBtn.getBoundingClientRect();
-                priorityPicker.style.left = `${btnRect.left + btnRect.width / 2}px`;
-                priorityPicker.style.top = `${btnRect.bottom + 10}px`;
+                const card = event.target.closest('.task-card');
+                if (!card) return;
+
+                const cardRect = card.getBoundingClientRect();
+                const appContainerRect = appContainer.getBoundingClientRect();
+
+                // Show the picker first to get its dimensions
                 priorityPicker.classList.remove('hidden');
+
+                // Calculate new position relative to app-container
+                const pickerTop = cardRect.bottom - appContainerRect.top + 5;
+                const pickerLeft = cardRect.right - appContainerRect.left - priorityPicker.offsetWidth;
+
+                // Apply new position
+                priorityPicker.style.top = `${pickerTop}px`;
+                priorityPicker.style.left = `${pickerLeft}px`;
+                priorityPicker.style.transform = 'none';
+
                 priorityPicker.dataset.currentTaskId = task.id; // Store task ID for color selection
 
                 // Highlight currently selected color
@@ -832,7 +948,7 @@
             }, { passive: true });
 
             card.addEventListener('touchmove', (e) => {
-                if (e.touches.length === 1 && task.status === 'active') {
+                if (e.touches.length === 1) {
                     const touchCurrentX = e.touches[0].clientX;
                     const deltaX = touchCurrentX - touchStartX;
                     const deltaY = e.touches[0].clientY - touchStartY;
@@ -841,6 +957,18 @@
                     if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) { // Threshold for swipe
                         isSwiping = true;
                         card.style.transform = `translateX(${deltaX}px)`;
+                        
+                        // Delete/Complete icon visibility
+                        const swipePercentage = Math.min(1, Math.abs(deltaX) / 100);
+                        if (deltaX < 0) {
+                            // Swiping left
+                            deleteOverlay.style.opacity = swipePercentage;
+                            completeOverlay.style.opacity = 0;
+                        } else if (task.status === 'active') { // Only show complete overlay if task is active
+                            // Swiping right
+                            completeOverlay.style.opacity = swipePercentage;
+                            deleteOverlay.style.opacity = 0;
+                        }
                     } else {
                         isSwiping = false;
                     }
@@ -849,19 +977,30 @@
 
             card.addEventListener('touchend', () => {
                 card.style.transition = 'transform 0.2s ease-out'; // Re-enable transition
-                if (isSwiping && task.status === 'active') {
+                deleteOverlay.style.opacity = 0; // Hide icon on touchend
+                completeOverlay.style.opacity = 0; // Hide icon on touchend
+
+                if (isSwiping) {
                     const currentTransform = card.style.transform;
                     const translateXMatch = currentTransform.match(/translateX\(([^)]+)px\)/);
                     const currentX = translateXMatch ? parseFloat(translateXMatch[1]) : 0;
-
-                    if (currentX < -100) { // Swipe left threshold
-                        completeTask(task.id);
+                    
+                    if (currentX < -100) { // Swipe left threshold (Delete)
+                        deleteTask(task.id);
                         card.style.transform = 'translateX(-100vw)'; // Animate off screen
                         setTimeout(() => {
-                            card.remove(); // Remove after animation
+                            cardWrapper.remove(); // Remove wrapper
                             renderTasks(projects.find(p => p && p.id === currentProjectId).tasks); // Re-render to update containers
                         }, 200);
-                    } else {
+                    } else if (currentX > 100 && task.status === 'active') { // Swipe right threshold (Complete), check if task is active
+                         completeTask(task.id);
+                         card.style.transform = 'translateX(100vw)'; // Animate off screen to the right
+                         setTimeout(() => {
+                            cardWrapper.remove(); // Remove wrapper
+                            renderTasks(projects.find(p => p && p.id === currentProjectId).tasks); // Re-render to update containers
+                         }, 200);
+                    }
+                    else {
                         card.style.transform = 'translateX(0)'; // Snap back
                     }
                 }
@@ -875,40 +1014,9 @@
             card.addEventListener('drop', handleTaskDrop);
             card.addEventListener('dragend', handleTaskDragEnd);
 
-            return card;
+            return cardWrapper;
         }
 
-        // --- Add task ---
-        // The click event for the existing addTaskBtn is used as is
-        addTaskBtn.addEventListener('click', () => {
-            const project = projects.find(p => p && p.id === currentProjectId);
-            if (!project) return;
-
-            // If project name is empty, set a default and update icon
-            if (!project.name.trim()) {
-                project.name = '新規プロジェクト';
-                project.iconChar = '新';
-                projectNameInput.value = project.name; // Update input field
-                saveProjects();
-                renderHome();
-            }
-
-            const newTask = {
-                id: generateUniqueId(),
-                content: '',
-                priorityColor: null, // No color initially
-                status: 'active',
-                originalPriorityColor: null // Initialize new property
-            };
-            project.tasks.push(newTask);
-            saveProjects();
-            renderTasks(project.tasks); // Re-render tasks to update button visibility
-            // Focus on the new task's textarea
-            setTimeout(() => {
-                const newTaskCard = document.querySelector(`[data-task-id="${newTask.id}"] .task-content`);
-                if (newTaskCard) newTaskCard.focus();
-            }, 0);
-        });
 
         // --- Priority picker operations ---
         document.querySelectorAll('.priority-color-btn').forEach(btn => {
@@ -920,10 +1028,16 @@
                 if (project && taskId) {
                     const taskToUpdate = project.tasks.find(t => t.id === taskId);
                     if (taskToUpdate) {
-                        taskToUpdate.priorityColor = selectedColor;
-                        // If setting priority on an active task, ensure originalPriorityColor is also updated
-                        if (taskToUpdate.status === 'active') {
-                            taskToUpdate.originalPriorityColor = selectedColor;
+                        // If selected color is gray, reset priority to null
+                        if (selectedColor === '#4a5568') {
+                            taskToUpdate.priorityColor = null;
+                            taskToUpdate.originalPriorityColor = null;
+                        } else {
+                            taskToUpdate.priorityColor = selectedColor;
+                            // If setting priority on an active task, ensure originalPriorityColor is also updated
+                            if (taskToUpdate.status === 'active') {
+                                taskToUpdate.originalPriorityColor = selectedColor;
+                            }
                         }
                         saveProjects();
                         renderTasks(project.tasks); // Re-render to update card color
@@ -937,11 +1051,13 @@
         sortTasksBtn.addEventListener('click', () => {
             const project = projects.find(p => p && p.id === currentProjectId);
             if (project) {
-                // Sort by priority (based on color definition order)
+                // 修正: ご要望の通り、ソート順を紫、赤、橙、黄、緑、青の順に変更
+                const colorOrder = ['#8b5cf6', '#ef4444', '#f97316', '#facc15', '#22c55e', '#3b82f6'];
+                
                 const sortedTasks = [...project.tasks].sort((a, b) => {
-                    const colorOrder = Object.keys(PRIORITY_COLORS);
-                    const indexA = a.priorityColor ? colorOrder.indexOf(a.priorityColor) : colorOrder.length; // No color at the end
-                    const indexB = b.priorityColor ? colorOrder.indexOf(b.priorityColor) : colorOrder.length; // No color at the end
+                    // 優先度色がないタスクはリストの最後に配置します
+                    const indexA = a.priorityColor ? colorOrder.indexOf(a.priorityColor) : colorOrder.length;
+                    const indexB = b.priorityColor ? colorOrder.indexOf(b.priorityColor) : colorOrder.length;
                     return indexA - indexB;
                 });
                 project.tasks = sortedTasks;
@@ -957,141 +1073,164 @@
             activeTaskCard = card;
             event.dataTransfer.setData('text/plain', card.dataset.taskId);
             event.dataTransfer.effectAllowed = 'move';
-            setTimeout(() => card.classList.add('dragging'), 0);
+            setTimeout(() => {
+                card.classList.add('dragging');
+                card.closest('.task-card-wrapper').classList.add('wrapper-dragging');
+            }, 0);
         }
 
+        // ▼▼▼ 変更点: ダミー要素を基準に判定するようにロジックを全面改修 ▼▼▼
         function handleTaskDragOver(event) {
-            event.preventDefault(); // Allow drop
+            event.preventDefault();
             event.dataTransfer.dropEffect = 'move';
 
-            // Remove all drag-over classes from all potential targets first
-            document.querySelectorAll('.task-card, #active-tasks-container, #completed-tasks-container').forEach(el => {
+            // 全てのハイライトを一旦リセット
+            document.querySelectorAll('.drag-over, .drag-over-top, .drag-over-bottom').forEach(el => {
                 el.classList.remove('drag-over', 'drag-over-top', 'drag-over-bottom');
             });
-            hideDropMessages(); // Hide drop messages from previous targets
 
-            const target = event.target.closest('.task-card, #active-tasks-container, #completed-tasks-container');
+            const target = event.target.closest('.task-card, .dummy-drop-zone');
 
             if (target && target !== activeTaskCard) {
                 if (target.classList.contains('task-card')) {
-                    // Hovering over another task card
+                    // 他のタスクカードに重なった場合
                     const targetRect = target.getBoundingClientRect();
                     const targetMiddleY = targetRect.top + targetRect.height / 2;
-                    const isBefore = event.clientY < targetMiddleY;
-
-                    if (isBefore) {
-                        target.classList.add('drag-over-top');
-                    } else {
-                        target.classList.add('drag-over-bottom');
-                    }
-                } else if (target.id === 'active-tasks-container' || target.id === 'completed-tasks-container') {
-                    // Hovering over an empty container or container itself
-                    target.classList.add('drag-over');
-                    // Check if the container is actually empty of *task cards*
-                    const hasTaskCards = target.querySelector('.task-card');
-                    if (!hasTaskCards) { // Only show message if truly empty of cards
-                        showDropMessage(target.id);
-                    }
+                    target.classList.add(event.clientY < targetMiddleY ? 'drag-over-top' : 'drag-over-bottom');
+                } else if (target.classList.contains('dummy-drop-zone')) {
+                    // ダミー要素に重なった場合、親コンテナの背景色を変更
+                    target.parentElement.classList.add('drag-over');
                 }
             }
         }
+        // ▲▲▲ 変更点ここまで ▲▲▲
 
+        // ▼▼▼ 変更点: 不要なロジックを削除し、シンプル化 ▼▼▼
         function handleTaskDragLeave(event) {
-            const target = event.currentTarget;
-            target.classList.remove('drag-over', 'drag-over-top', 'drag-over-bottom');
-            // If leaving a container, ensure its specific drag-over class is removed
-            if (target.id === 'active-tasks-container' || target.id === 'completed-tasks-container') {
-                target.classList.remove('drag-over');
-                hideDropMessages(); // Hide messages when dragging out of a container
-            }
+            // handleTaskDragOverでハイライトは管理するため、ここでは何もしない
         }
+        // ▲▲▲ 変更点ここまで ▲▲▲
 
+        // ▼▼▼ 変更点: ダミー要素へのドロップを判定するようにロジックを全面改修 ▼▼▼
         function handleTaskDrop(event) {
             event.preventDefault();
             const taskId = event.dataTransfer.getData('text/plain');
-            const draggedCard = document.querySelector(`[data-task-id="${taskId}"]`);
-            const target = event.target.closest('.task-card, #active-tasks-container, #completed-tasks-container');
-
-            if (!draggedCard || !target) return;
-
             const project = projects.find(p => p && p.id === currentProjectId);
-            if (!project) return;
-
-            // Remove all drag-over classes from all elements after drop
-            document.querySelectorAll('.task-card, #active-tasks-container, #completed-tasks-container').forEach(el => {
-                el.classList.remove('drag-over', 'drag-over-top', 'drag-over-bottom');
-            });
-            hideDropMessages(); // Hide messages after drop
-
-            const draggedTask = project.tasks.find(t => t.id === taskId);
+            const draggedTask = project?.tasks.find(t => t.id === taskId);
+            
             if (!draggedTask) return;
 
-            let newStatus = draggedTask.status; // Default to current status
-            let targetContainer = null;
+            // 全てのハイライトを削除
+            document.querySelectorAll('.drag-over, .drag-over-top, .drag-over-bottom').forEach(el => {
+                el.classList.remove('drag-over', 'drag-over-top', 'drag-over-bottom');
+            });
 
-            if (target.id === 'active-tasks-container') {
-                targetContainer = activeTasksContainer;
-                newStatus = 'active';
-            } else if (target.id === 'completed-tasks-container') {
-                targetContainer = completedTasksContainer;
-                newStatus = 'completed';
-            } else if (target.classList.contains('task-card')) {
-                // Dropped onto another task card
-                targetContainer = target.closest('#active-tasks-container') || target.closest('#completed-tasks-container');
-                newStatus = targetContainer.id === 'active-tasks-container' ? 'active' : 'completed';
+            const targetElement = event.target.closest('.task-card, .dummy-drop-zone');
+            if (!targetElement) return;
+
+            let targetContainer;
+            let newStatus;
+            let insertIndex = -1;
+
+            if (targetElement.classList.contains('dummy-drop-zone')) {
+                // ダミー要素へのドロップ
+                targetContainer = targetElement.parentElement;
+                insertIndex = 0; // 空のコンテナなので先頭に追加
+            } else if (targetElement.classList.contains('task-card')) {
+                // 既存カードへのドロップ
+                targetContainer = targetElement.closest('#active-tasks-container, #completed-tasks-container');
+                const targetTaskId = targetElement.dataset.taskId;
+                const tasksInContainer = project.tasks.filter(t => t.status === (targetContainer.id === 'active-tasks-container' ? 'active' : 'completed'));
+                const targetIndexInContainer = tasksInContainer.findIndex(t => t.id === targetTaskId);
+
+                const targetRect = targetElement.getBoundingClientRect();
+                const isBefore = event.clientY < (targetRect.top + targetRect.height / 2);
+                insertIndex = isBefore ? targetIndexInContainer : targetIndexInContainer + 1;
+            }
+            
+            if (!targetContainer) return;
+
+            newStatus = targetContainer.id === 'active-tasks-container' ? 'active' : 'completed';
+
+            // ステータスの変更処理
+            if (draggedTask.status !== newStatus) {
+                draggedTask.status = newStatus;
+                if (newStatus === 'completed') {
+                    draggedTask.originalPriorityColor = draggedTask.priorityColor;
+                    draggedTask.priorityColor = '#3b82f6';
+                } else {
+                    draggedTask.priorityColor = draggedTask.originalPriorityColor;
+                    draggedTask.originalPriorityColor = null;
+                }
+            }
+            
+            // 配列から一度削除
+            const taskIndex = project.tasks.findIndex(t => t.id === taskId);
+            project.tasks.splice(taskIndex, 1);
+            
+            // 新しい位置に挿入
+            const tasksInNewContainer = project.tasks.filter(t => t.status === newStatus);
+            const referenceTask = tasksInNewContainer[insertIndex];
+            
+            let finalInsertIndex;
+            if (referenceTask) {
+                finalInsertIndex = project.tasks.findIndex(t => t.id === referenceTask.id);
+            } else {
+                // コンテナの末尾に追加する場合
+                const lastTaskInContainer = tasksInNewContainer[tasksInNewContainer.length - 1];
+                if (lastTaskInContainer) {
+                    finalInsertIndex = project.tasks.findIndex(t => t.id === lastTaskInContainer.id) + 1;
+                } else {
+                    // コンテナが空だった場合
+                    const otherContainerLastTask = project.tasks[project.tasks.length - 1];
+                    if (otherContainerLastTask) {
+                        finalInsertIndex = newStatus === 'active' ? 0 : project.tasks.length;
+                    } else {
+                        finalInsertIndex = 0;
+                    }
+                }
             }
 
-            if (targetContainer) {
-                // Update task status if it changed containers
-                if (draggedTask.status !== newStatus) {
-                    if (newStatus === 'completed') {
-                        // Moving to completed: store current color, then set to blue
-                        draggedTask.originalPriorityColor = draggedTask.priorityColor;
-                        draggedTask.priorityColor = '#3b82f6';
-                    } else if (newStatus === 'active') {
-                        // Moving to active: restore original color
-                        draggedTask.priorityColor = draggedTask.originalPriorityColor;
-                        draggedTask.originalPriorityColor = null; // Clear stored original color
-                    }
-                    draggedTask.status = newStatus; // Update status last
-                }
+            project.tasks.splice(finalInsertIndex, 0, draggedTask);
 
-                // Reorder tasks within the project.tasks array
-                const currentTasksInContainer = project.tasks.filter(t => t.id !== draggedTask.id && t.status === newStatus); // Exclude dragged task from current list
-                const otherTasks = project.tasks.filter(t => t.id !== draggedTask.id && t.status !== newStatus); // Exclude dragged task from other lists
-
-                let insertIndex = currentTasksInContainer.length; // Default to end of container
-
-                if (target.classList.contains('task-card')) {
-                    const targetTaskId = target.dataset.taskId;
-                    const targetIndex = currentTasksInContainer.findIndex(t => t.id === targetTaskId);
-
-                    if (targetIndex > -1) {
-                        const targetRect = target.getBoundingClientRect();
-                        const isBefore = event.clientY < (targetRect.top + targetRect.height / 2);
-                        insertIndex = isBefore ? targetIndex : targetIndex + 1;
-                    }
-                }
-                
-                currentTasksInContainer.splice(insertIndex, 0, draggedTask); // Insert dragged task
-
-                project.tasks = [...otherTasks, ...currentTasksInContainer];
-                saveProjects();
-                renderTasks(project.tasks);
-            }
+            saveProjects();
+            renderTasks(project.tasks);
         }
+        // ▲▲▲ 変更点ここまで ▲▲▲
 
         function handleTaskDragEnd(event) {
-            activeTaskCard.classList.remove('dragging');
+            // ▼▼▼ 変更点: activeTaskCardの存在チェックと、ラッパーのクラス削除処理を追加 ▼▼▼
+            if (activeTaskCard) {
+                activeTaskCard.classList.remove('dragging');
+                const wrapper = activeTaskCard.closest('.task-card-wrapper');
+                if (wrapper) {
+                    wrapper.classList.remove('wrapper-dragging');
+                }
+            }
             activeTaskCard = null;
+            // ▲▲▲ 変更点ここまで ▲▲▲
+
             // Remove any lingering drag-over classes
             document.querySelectorAll('.task-card, #active-tasks-container, #completed-tasks-container').forEach(el => {
                 el.classList.remove('drag-over', 'drag-over-top', 'drag-over-bottom');
             });
             hideDropMessages(); // Hide messages when drag ends
         }
+        
+        // --- Delete task (swipe left) ---
+        function deleteTask(taskId) {
+            const project = projects.find(p => p && p.id === currentProjectId);
+            if (project) {
+                const taskIndex = project.tasks.findIndex(t => t.id === taskId);
+                if (taskIndex !== -1) {
+                    project.tasks.splice(taskIndex, 1);
+                    saveProjects();
+                    showMessage('タスクを削除しました', 'success');
+                }
+            }
+        }
 
-        // --- Complete task (swipe left) ---
+        // --- Complete task (swipe right) ---
         function completeTask(taskId) {
             const project = projects.find(p => p && p.id === currentProjectId);
             if (project) {
