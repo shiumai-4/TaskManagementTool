@@ -105,6 +105,25 @@
             color: #06b6d4; /* cyan-500 */
         }
 
+        /* ▼▼▼ 追加 ▼▼▼ */
+        #app-container {
+            transition: height 0.3s ease-in-out;
+        }
+        /* ▲▲▲ 追加ここまで ▲▲▲ */
+        /* ▼▼▼ 追加: 狭い画面幅用のレスポンシブ対応 ▼▼▼ */
+        @media (max-width: 400px) {
+            #task-screen > div:first-child {
+                flex-wrap: wrap;
+                justify-content: flex-end;
+            }
+            #project-name-input {
+                width: 100%;
+                margin-right: 0;
+                margin-bottom: 0.75rem; /* 12px */
+            }
+        }
+        /* ▲▲▲ 追加ここまで ▲▲▲ */
+
         /* Hide specific elements when printing */
         @media print {
             .no-print {
@@ -115,9 +134,9 @@
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
 
-    <div id="app-container" class="relative w-full max-w-4xl bg-gray-800 rounded-xl shadow-2xl p-6 flex flex-col" style="min-height: 700px;">
+    <div id="app-container" class="relative w-full max-w-4xl bg-gray-800 rounded-xl shadow-2xl p-6 flex flex-col">
 
-        <div id="home-screen" class="absolute inset-0 flex flex-col p-6 fade-enter-active fade-enter-to">
+        <div id="home-screen" class="absolute inset-0 flex flex-col p-6 fade-enter-active fade-enter-to pb-4">
             <h1 class="text-3xl font-bold mb-8 text-center text-indigo-400">プロジェクト</h1>
             <div id="project-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 pb-4">
                 </div>
@@ -247,6 +266,17 @@
         // Helper functions
         function generateUniqueId() { return crypto.randomUUID(); }
 
+        // ▼▼▼ 追加: コンテナの高さを動的に更新する関数 ▼▼▼
+        function updateContainerHeight() {
+            // 現在表示されているスクリーン（opacityが0でないもの）を特定
+            const currentScreen = taskScreen.classList.contains('pointer-events-none') ? homeScreen : taskScreen;
+            if (currentScreen) {
+                // scrollHeightはpaddingを含む要素のコンテンツの高さを返す
+                const newHeight = currentScreen.scrollHeight;
+                appContainer.style.height = `${newHeight}px`;
+            }
+        }
+
         function showScreen(screenToShow) {
             projectContextMenu.classList.add('hidden');
             priorityPicker.classList.add('hidden');
@@ -260,7 +290,15 @@
             setTimeout(() => {
                 screenToShow.classList.remove('opacity-0', 'pointer-events-none');
                 screenToShow.classList.add('fade-enter-active');
-                setTimeout(() => screenToShow.classList.add('fade-enter-to'), 10);
+
+                // ▼▼▼ 修正: 表示する画面に合わせて高さを更新 ▼▼▼
+                updateContainerHeight();
+
+                setTimeout(() => {
+                    screenToShow.classList.add('fade-enter-to');
+                    // アニメーション完了後にもう一度高さを更新（レンダリングの遅延に対応）
+                    setTimeout(updateContainerHeight, 300);
+                }, 10);
             }, 300);
         }
 
@@ -505,13 +543,18 @@
         });
 
         function renderTasks(tasks) {
-            activeTasksContainer.innerHTML = '';
-            completedTasksContainer.innerHTML = '';
+            // 修正: innerHTML = '' の代わりに、タスクカードと追加ボタンのみを削除
+            activeTasksContainer.querySelectorAll('.task-card-wrapper, .mt-4.flex.justify-center').forEach(el => el.remove());
+            completedTasksContainer.querySelectorAll('.task-card-wrapper').forEach(el => el.remove());
+
             const activeTasks = tasks.filter(task => task.status === 'active');
             const completedTasks = tasks.filter(task => task.status === 'completed');
             activeTasksCountSpan.textContent = activeTasks.length;
             completedTasksCountSpan.textContent = completedTasks.length;
+
+            // 修正により、このメッセージ表示制御が正しく機能する
             noActiveTasksMessage.classList.toggle('hidden', activeTasks.length > 0);
+            
             activeTasks.forEach(task => activeTasksContainer.appendChild(createTaskCard(task)));
             if (activeTasks.length >= 3) {
                 const addButtonContainer = document.createElement('div');
@@ -520,8 +563,13 @@
                 addButtonContainer.firstElementChild.addEventListener('click', addNewTask);
                 activeTasksContainer.appendChild(addButtonContainer);
             }
+
+            // 修正により、このメッセージ表示制御が正しく機能する
             noCompletedTasksMessage.classList.toggle('hidden', completedTasks.length > 0);
             completedTasks.forEach(task => completedTasksContainer.appendChild(createTaskCard(task)));
+            
+            // ▼▼▼ 追加: タスク描画後に高さを更新 ▼▼▼
+            setTimeout(updateContainerHeight, 50);
         }
 
         function addNewTask() {
@@ -580,6 +628,8 @@
                     taskToUpdate.content = taskContentInput.value;
                     saveProjects();
                 }
+                // ▼▼▼ 追加: テキストエリアの高さ変更時にコンテナの高さを更新 ▼▼▼
+                updateContainerHeight();
             });
             setTimeout(() => { taskContentInput.style.height = 'auto'; taskContentInput.style.height = `${taskContentInput.scrollHeight}px`; }, 0);
             card.querySelector('.priority-btn').addEventListener('click', (event) => {
@@ -669,9 +719,25 @@
             }
         };
 
+        const handleDragLeave = (event) => {
+            // マウスがコンテナの境界の外に出たかを確認
+            if (!event.currentTarget.contains(event.relatedTarget)) {
+                event.currentTarget.classList.remove('drag-over');
+                const messageEl = event.currentTarget.id === 'active-tasks-container' ? activeDropMessage : completedDropMessage;
+                messageEl.classList.add('hidden');
+            }
+        };
+
         const handleDrop = (event) => {
             event.preventDefault();
             const taskId = event.dataTransfer.getData('text/plain');
+            const container = event.currentTarget;
+
+            // 修正: ドロップ時にコンテナの視覚効果を即座に消す
+            container.classList.remove('drag-over');
+            const messageEl = container.id === 'active-tasks-container' ? activeDropMessage : completedDropMessage;
+            messageEl.classList.add('hidden');
+
             if (!taskId) return;
             const project = projects.find(p => p?.id === currentProjectId);
             if (!project) return;
@@ -679,7 +745,6 @@
             if (draggedTaskIndex === -1) return;
             
             const [draggedTask] = project.tasks.splice(draggedTaskIndex, 1);
-            const container = event.currentTarget;
             const newStatus = container.id === 'active-tasks-container' ? 'active' : 'completed';
 
             if (draggedTask.status !== newStatus) {
@@ -797,16 +862,19 @@
         });
         
         window.addEventListener('resize', () => {
-            if (!taskScreen.classList.contains('pointer-events-none')) {
-                renderHome();
-            }
+            // ▼▼▼ 修正: リサイズ時にも高さを更新 ▼▼▼
+            updateContainerHeight();
         });
         
         document.addEventListener('DOMContentLoaded', () => {
             loadProjects();
+            // ▼▼▼ 追加: 初期ロード時に高さを設定 ▼▼▼
+            setTimeout(updateContainerHeight, 50);
+
             [activeTasksContainer, completedTasksContainer].forEach(container => {
                 container.addEventListener('dragstart', handleDragStart);
                 container.addEventListener('dragover', handleDragOver);
+                container.addEventListener('dragleave', handleDragLeave);
                 container.addEventListener('drop', handleDrop);
                 container.addEventListener('dragend', handleDragEnd);
             });
