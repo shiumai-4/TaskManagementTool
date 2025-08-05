@@ -669,13 +669,19 @@
                 deleteOverlay.style.opacity = 0;
                 completeOverlay.style.opacity = 0;
                 const endX = parseFloat(card.style.transform.replace('translateX(', '')) || 0;
-                if (endX < -100) {
+                
+                // ▼▼▼ 修正箇所 ▼▼▼
+                // 削除に必要なスライド量を -100px から -200px に変更します。
+                if (endX < -200) { 
                     deleteTask(task.id);
-                } else if (endX > 100 && task.status === 'active') {
+                // 完了に必要なスライド量は 100px のままです。
+                } else if (endX > 100 && task.status === 'active') { 
                     completeTask(task.id);
                 } else {
                     card.style.transform = 'translateX(0)';
                 }
+                // ▲▲▲ 修正ここまで ▲▲▲
+
                 isSwiping = false;
             });
             return cardWrapper;
