@@ -69,7 +69,6 @@
         .project-cell.highlight {
             border: 2px solid #6366f1; /* Highlight for move mode */
         }
-        /* ▼▼▼ 修正: task-card-wrapperのスタイルを正しく定義 ▼▼▼ */
         .task-card-wrapper {
             position: relative;
             overflow-x: hidden; /* Prevent horizontal scrollbar on wrapper */
@@ -77,7 +76,6 @@
         .task-card-wrapper.wrapper-dragging {
             z-index: 20;
         }
-        /* ▲▲▲ 修正ここまで ▲▲▲ */
 
         .task-delete-overlay, .task-complete-overlay {
             position: absolute;
@@ -105,12 +103,19 @@
             color: #06b6d4; /* cyan-500 */
         }
 
-        /* ▼▼▼ 追加 ▼▼▼ */
         #app-container {
             transition: height 0.3s ease-in-out;
         }
+        
+        /* ▼▼▼ 追加: 表示数切り替えトグル用CSS ▼▼▼ */
+        #display-toggle:checked ~ .toggle-bg {
+            background-color: #4f46e5; /* indigo-600 */
+        }
+        #display-toggle:checked ~ .dot {
+            transform: translateX(1.5rem); /* 24px */
+        }
         /* ▲▲▲ 追加ここまで ▲▲▲ */
-        /* ▼▼▼ 追加: 狭い画面幅用のレスポンシブ対応 ▼▼▼ */
+
         @media (max-width: 400px) {
             #task-screen > div:first-child {
                 flex-wrap: wrap;
@@ -122,9 +127,7 @@
                 margin-bottom: 0.75rem; /* 12px */
             }
         }
-        /* ▲▲▲ 追加ここまで ▲▲▲ */
 
-        /* Hide specific elements when printing */
         @media print {
             .no-print {
                 display: none !important;
@@ -137,7 +140,14 @@
     <div id="app-container" class="relative w-full max-w-4xl bg-gray-800 rounded-xl shadow-2xl p-6 flex flex-col">
 
         <div id="home-screen" class="absolute inset-0 flex flex-col p-6 fade-enter-active fade-enter-to pb-4">
-            <h1 class="text-3xl font-bold mb-8 text-center text-indigo-400">プロジェクト</h1>
+            <div class="flex justify-between items-center mb-8">
+                <h1 class="text-3xl font-bold text-indigo-400">プロジェクト</h1>
+                <label for="display-toggle" class="relative flex items-center cursor-pointer">
+                    <input type="checkbox" id="display-toggle" class="sr-only">
+                    <div class="toggle-bg block bg-gray-600 w-14 h-8 rounded-full"></div>
+                    <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform"></div>
+                </label>
+            </div>
             <div id="project-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 pb-4">
                 </div>
         </div>
@@ -208,14 +218,17 @@
             </div>
         </div>
 
+        <div id="task-context-menu" class="absolute bg-gray-700 p-2 rounded-lg shadow-xl z-20 hidden flex flex-col gap-2">
+            <button id="complete-task-btn" class="context-menu-btn bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg transition duration-200">完了</button>
+            <button id="delete-task-btn-menu" class="context-menu-btn bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg transition duration-200">削除</button>
+        </div>
+
         <div id="message-box" class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 hidden opacity-0 transition-opacity duration-300">
             メッセージ
         </div>
-
     </div>
 
     <script>
-        // ▼▼▼ 修正: 必要なDOM要素を全てスクリプトの最初に取得・保持する ▼▼▼
         const homeScreen = document.getElementById('home-screen');
         const taskScreen = document.getElementById('task-screen');
         const projectGrid = document.getElementById('project-grid');
@@ -245,17 +258,27 @@
         const completedDropMessage = document.getElementById('completed-drop-message');
         const activeTasksCountSpan = document.getElementById('active-tasks-count');
         const completedTasksCountSpan = document.getElementById('completed-tasks-count');
+        const taskContextMenu = document.getElementById('task-context-menu');
+        const completeTaskBtn = document.getElementById('complete-task-btn');
+        const deleteTaskBtnMenu = document.getElementById('delete-task-btn-menu');
+        // ▼▼▼ 追加 ▼▼▼
+        const displayToggle = document.getElementById('display-toggle');
+        // ▲▲▲ 追加ここまで ▲▲▲
 
         // Application state
         let projects = [];
         let currentProjectId = null;
-        let activeTaskCard = null; // ドラッグ中のタスクカード要素を保持
+        let activeTaskCard = null;
         let activeProjectCell = null;
         let longPressTimer = null;
         let isMovingProjects = false;
 
-        // Constants
-        const NUM_PROJECT_CELLS = 24;
+        // Constants and state for project display
+        // ▼▼▼ 修正 ▼▼▼
+        const MAX_PROJECT_CELLS = 24;
+        let projectCellCount = MAX_PROJECT_CELLS; // デフォルトは24
+        // ▲▲▲ 修正ここまで ▲▲▲
+
         const PROJECT_ICON_COLORS = [
             '#6366f1', '#a855f7', '#ec4899', '#f43f5e', '#ef4444', '#f97316',
             '#facc15', '#eab308', '#84cc16', '#22c55e', '#06b6d4', '#3b82f6',
@@ -266,12 +289,9 @@
         // Helper functions
         function generateUniqueId() { return crypto.randomUUID(); }
 
-        // ▼▼▼ 追加: コンテナの高さを動的に更新する関数 ▼▼▼
         function updateContainerHeight() {
-            // 現在表示されているスクリーン（opacityが0でないもの）を特定
             const currentScreen = taskScreen.classList.contains('pointer-events-none') ? homeScreen : taskScreen;
             if (currentScreen) {
-                // scrollHeightはpaddingを含む要素のコンテンツの高さを返す
                 const newHeight = currentScreen.scrollHeight;
                 appContainer.style.height = `${newHeight}px`;
             }
@@ -280,6 +300,7 @@
         function showScreen(screenToShow) {
             projectContextMenu.classList.add('hidden');
             priorityPicker.classList.add('hidden');
+            taskContextMenu.classList.add('hidden');
             hideModal(confirmModal);
             hideModal(colorPickerModal);
             const screens = [homeScreen, taskScreen];
@@ -290,13 +311,9 @@
             setTimeout(() => {
                 screenToShow.classList.remove('opacity-0', 'pointer-events-none');
                 screenToShow.classList.add('fade-enter-active');
-
-                // ▼▼▼ 修正: 表示する画面に合わせて高さを更新 ▼▼▼
                 updateContainerHeight();
-
                 setTimeout(() => {
                     screenToShow.classList.add('fade-enter-to');
-                    // アニメーション完了後にもう一度高さを更新（レンダリングの遅延に対応）
                     setTimeout(updateContainerHeight, 300);
                 }, 10);
             }, 300);
@@ -328,13 +345,22 @@
 
         // --- Data management ---
         function saveProjects() { localStorage.setItem('taskManagerProjects', JSON.stringify(projects)); }
+        
+        // ▼▼▼ 修正: 表示数の設定を読み込み、プロジェクトデータの配列長を正規化する ▼▼▼
         function loadProjects() {
+            const storedCount = localStorage.getItem('taskManagerDisplayCount');
+            projectCellCount = storedCount ? parseInt(storedCount, 10) : MAX_PROJECT_CELLS;
+            
             const storedProjects = localStorage.getItem('taskManagerProjects');
             if (storedProjects) {
                 projects = JSON.parse(storedProjects);
+                if (projects.length < MAX_PROJECT_CELLS) {
+                    projects.push(...Array(MAX_PROJECT_CELLS - projects.length).fill(null));
+                }
+                projects = projects.slice(0, MAX_PROJECT_CELLS);
                 projects.forEach(p => p?.tasks.forEach(t => { if (t.originalPriorityColor === undefined) t.originalPriorityColor = null; }));
             } else {
-                projects = Array(NUM_PROJECT_CELLS).fill(null);
+                projects = Array(MAX_PROJECT_CELLS).fill(null);
             }
             renderHome();
         }
@@ -342,7 +368,8 @@
         // --- Home screen functions ---
         function renderHome() {
             projectGrid.innerHTML = '';
-            for (let i = 0; i < NUM_PROJECT_CELLS; i++) {
+            // ▼▼▼ 修正: 表示数に合わせてループ ▼▼▼
+            for (let i = 0; i < projectCellCount; i++) {
                 const project = projects[i];
                 const cell = document.createElement('div');
                 cell.className = 'project-cell relative w-full aspect-square rounded-xl flex flex-col items-center justify-center cursor-pointer transition duration-200 ease-in-out transform hover:scale-105 shadow-lg p-2';
@@ -391,12 +418,13 @@
         function handleProjectCellClick(event) {
             if (isMovingProjects) return;
             const cell = event.currentTarget;
-            const projectId = cell.dataset.projectId;
-            if (projectId) {
-                openTaskScreen(projectId);
+            const index = parseInt(cell.dataset.index);
+            const project = projects[index];
+            if (project) {
+                openTaskScreen(project.id);
             } else {
                 const newProject = { id: generateUniqueId(), name: '', iconChar: '?', color: PROJECT_ICON_COLORS[Math.floor(Math.random() * PROJECT_ICON_COLORS.length)], tasks: [] };
-                projects[parseInt(cell.dataset.index)] = newProject;
+                projects[index] = newProject;
                 saveProjects();
                 renderHome();
                 openTaskScreen(newProject.id);
@@ -543,18 +571,13 @@
         });
 
         function renderTasks(tasks) {
-            // 修正: innerHTML = '' の代わりに、タスクカードと追加ボタンのみを削除
             activeTasksContainer.querySelectorAll('.task-card-wrapper, .mt-4.flex.justify-center').forEach(el => el.remove());
             completedTasksContainer.querySelectorAll('.task-card-wrapper').forEach(el => el.remove());
-
             const activeTasks = tasks.filter(task => task.status === 'active');
             const completedTasks = tasks.filter(task => task.status === 'completed');
             activeTasksCountSpan.textContent = activeTasks.length;
             completedTasksCountSpan.textContent = completedTasks.length;
-
-            // 修正により、このメッセージ表示制御が正しく機能する
             noActiveTasksMessage.classList.toggle('hidden', activeTasks.length > 0);
-            
             activeTasks.forEach(task => activeTasksContainer.appendChild(createTaskCard(task)));
             if (activeTasks.length >= 3) {
                 const addButtonContainer = document.createElement('div');
@@ -563,12 +586,8 @@
                 addButtonContainer.firstElementChild.addEventListener('click', addNewTask);
                 activeTasksContainer.appendChild(addButtonContainer);
             }
-
-            // 修正により、このメッセージ表示制御が正しく機能する
             noCompletedTasksMessage.classList.toggle('hidden', completedTasks.length > 0);
             completedTasks.forEach(task => completedTasksContainer.appendChild(createTaskCard(task)));
-            
-            // ▼▼▼ 追加: タスク描画後に高さを更新 ▼▼▼
             setTimeout(updateContainerHeight, 50);
         }
 
@@ -611,6 +630,15 @@
                 <div class="drag-handle w-6 h-full flex items-center justify-center cursor-grab text-gray-300"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg></div>
                 <textarea class="task-content flex-grow bg-transparent text-gray-100 placeholder-gray-300 focus:outline-none resize-none overflow-hidden" placeholder="タスク内容" rows="1">${task.content}</textarea>
                 <button class="priority-btn w-8 h-8 rounded-full bg-gray-700 flex-shrink-0 flex items-center justify-center shadow-inner transition duration-200 ease-in-out transform hover:scale-110"><i class="fas fa-paint-brush text-gray-300"></i></button>`;
+            
+            const dragHandle = card.querySelector('.drag-handle');
+            dragHandle.addEventListener('contextmenu', (event) => {
+                event.preventDefault();
+                projectContextMenu.classList.add('hidden');
+                priorityPicker.classList.add('hidden');
+                openTaskContextMenu(event, task.id, task.status);
+            });
+
             const deleteOverlay = document.createElement('div');
             deleteOverlay.className = 'task-delete-overlay';
             deleteOverlay.innerHTML = `<i class="fas fa-trash-alt text-red-500 mr-2"></i><span>削除</span>`;
@@ -628,7 +656,6 @@
                     taskToUpdate.content = taskContentInput.value;
                     saveProjects();
                 }
-                // ▼▼▼ 追加: テキストエリアの高さ変更時にコンテナの高さを更新 ▼▼▼
                 updateContainerHeight();
             });
             setTimeout(() => { taskContentInput.style.height = 'auto'; taskContentInput.style.height = `${taskContentInput.scrollHeight}px`; }, 0);
@@ -648,7 +675,7 @@
                 card.style.transition = 'transform 0s';
             }, { passive: true });
             card.addEventListener('touchmove', e => {
-                if (activeTaskCard) return; //ドラッグ中はスワイプさせない
+                if (activeTaskCard) return;
                 const deltaX = e.touches[0].clientX - touchStartX;
                 if (Math.abs(deltaX) > 10) isSwiping = true;
                 if (isSwiping) {
@@ -669,25 +696,18 @@
                 deleteOverlay.style.opacity = 0;
                 completeOverlay.style.opacity = 0;
                 const endX = parseFloat(card.style.transform.replace('translateX(', '')) || 0;
-                
-                // ▼▼▼ 修正箇所 ▼▼▼
-                // 削除に必要なスライド量を -100px から -200px に変更します。
                 if (endX < -200) { 
                     deleteTask(task.id);
-                // 完了に必要なスライド量は 100px のままです。
                 } else if (endX > 100 && task.status === 'active') { 
                     completeTask(task.id);
                 } else {
                     card.style.transform = 'translateX(0)';
                 }
-                // ▲▲▲ 修正ここまで ▲▲▲
-
                 isSwiping = false;
             });
             return cardWrapper;
         }
 
-        // --- Task Drag & Drop (Event Delegation Model) ---
         const handleDragStart = (event) => {
             const card = event.target.closest('.task-card');
             if (card) {
@@ -704,14 +724,11 @@
         const handleDragOver = (event) => {
             event.preventDefault();
             if (!activeTaskCard) return;
-
-            // 全てのハイライトをリセット
             document.querySelectorAll('.drag-over, .drag-over-top, .drag-over-bottom').forEach(el => {
                 el.classList.remove('drag-over', 'drag-over-top', 'drag-over-bottom');
             });
             activeDropMessage.classList.add('hidden');
             completedDropMessage.classList.add('hidden');
-
             const dropTargetCard = event.target.closest('.task-card');
             if (dropTargetCard && dropTargetCard !== activeTaskCard) {
                 const targetRect = dropTargetCard.getBoundingClientRect();
@@ -726,7 +743,6 @@
         };
 
         const handleDragLeave = (event) => {
-            // マウスがコンテナの境界の外に出たかを確認
             if (!event.currentTarget.contains(event.relatedTarget)) {
                 event.currentTarget.classList.remove('drag-over');
                 const messageEl = event.currentTarget.id === 'active-tasks-container' ? activeDropMessage : completedDropMessage;
@@ -738,27 +754,21 @@
             event.preventDefault();
             const taskId = event.dataTransfer.getData('text/plain');
             const container = event.currentTarget;
-
-            // 修正: ドロップ時にコンテナの視覚効果を即座に消す
             container.classList.remove('drag-over');
             const messageEl = container.id === 'active-tasks-container' ? activeDropMessage : completedDropMessage;
             messageEl.classList.add('hidden');
-
             if (!taskId) return;
             const project = projects.find(p => p?.id === currentProjectId);
             if (!project) return;
             const draggedTaskIndex = project.tasks.findIndex(t => t.id === taskId);
             if (draggedTaskIndex === -1) return;
-            
             const [draggedTask] = project.tasks.splice(draggedTaskIndex, 1);
             const newStatus = container.id === 'active-tasks-container' ? 'active' : 'completed';
-
             if (draggedTask.status !== newStatus) {
                 draggedTask.status = newStatus;
                 draggedTask.originalPriorityColor = draggedTask.status === 'completed' ? draggedTask.priorityColor : draggedTask.originalPriorityColor;
                 draggedTask.priorityColor = newStatus === 'completed' ? '#3b82f6' : draggedTask.originalPriorityColor;
             }
-            
             const dropTargetCard = event.target.closest('.task-card');
             if (dropTargetCard && dropTargetCard !== activeTaskCard) {
                 const dropTaskId = dropTargetCard.dataset.taskId;
@@ -778,6 +788,7 @@
             }
             saveProjects();
             renderTasks(project.tasks);
+            activeTaskCard = null; 
         };
 
         const handleDragEnd = () => {
@@ -794,7 +805,25 @@
             completedDropMessage.classList.add('hidden');
         };
 
-        // --- Other Task Functions ---
+        function openTaskContextMenu(event, taskId, taskStatus) {
+            taskContextMenu.dataset.taskId = taskId;
+            completeTaskBtn.style.display = (taskStatus === 'active') ? 'block' : 'none';
+            taskContextMenu.classList.remove('hidden');
+            const appRect = appContainer.getBoundingClientRect();
+            let menuLeft = event.clientX - appRect.left;
+            let menuTop = event.clientY - appRect.top;
+            setTimeout(() => {
+                if (menuLeft + taskContextMenu.offsetWidth > appRect.width) {
+                    menuLeft = appRect.width - taskContextMenu.offsetWidth - 5;
+                }
+                if (menuTop + taskContextMenu.offsetHeight > appRect.height) {
+                    menuTop = appRect.height - taskContextMenu.offsetHeight - 5;
+                }
+                taskContextMenu.style.left = `${menuLeft}px`;
+                taskContextMenu.style.top = `${menuTop}px`;
+            }, 0);
+        }
+
         sortTasksBtn.addEventListener('click', () => {
             const project = projects.find(p => p?.id === currentProjectId);
             if (project) {
@@ -852,13 +881,31 @@
             });
         });
 
-        // --- Global Click/Load/Resize Handlers ---
+        completeTaskBtn.addEventListener('click', () => {
+            const taskId = taskContextMenu.dataset.taskId;
+            if (taskId) {
+                completeTask(taskId);
+            }
+            taskContextMenu.classList.add('hidden');
+        });
+
+        deleteTaskBtnMenu.addEventListener('click', () => {
+            const taskId = taskContextMenu.dataset.taskId;
+            if (taskId) {
+                deleteTask(taskId);
+            }
+            taskContextMenu.classList.add('hidden');
+        });
+
         document.addEventListener('click', (event) => {
             if (!projectContextMenu.contains(event.target) && !event.target.closest('.project-cell')) {
                 projectContextMenu.classList.add('hidden');
             }
             if (!priorityPicker.contains(event.target) && !event.target.closest('.priority-btn')) {
                 priorityPicker.classList.add('hidden');
+            }
+            if (!taskContextMenu.contains(event.target) && !event.target.closest('.drag-handle')) {
+                taskContextMenu.classList.add('hidden');
             }
             if (isMovingProjects && !event.target.closest('.project-cell') && !event.target.closest('.context-menu-btn')) {
                 isMovingProjects = false;
@@ -868,13 +915,23 @@
         });
         
         window.addEventListener('resize', () => {
-            // ▼▼▼ 修正: リサイズ時にも高さを更新 ▼▼▼
             updateContainerHeight();
         });
         
         document.addEventListener('DOMContentLoaded', () => {
             loadProjects();
-            // ▼▼▼ 追加: 初期ロード時に高さを設定 ▼▼▼
+            
+            // ▼▼▼ 追加: トグルの初期状態とイベントリスナーを設定 ▼▼▼
+            displayToggle.checked = projectCellCount === MAX_PROJECT_CELLS;
+
+            displayToggle.addEventListener('change', () => {
+                projectCellCount = displayToggle.checked ? MAX_PROJECT_CELLS : 12;
+                localStorage.setItem('taskManagerDisplayCount', projectCellCount);
+                renderHome();
+                setTimeout(updateContainerHeight, 50); 
+            });
+            // ▲▲▲ 追加ここまで ▲▲▲
+
             setTimeout(updateContainerHeight, 50);
 
             [activeTasksContainer, completedTasksContainer].forEach(container => {
