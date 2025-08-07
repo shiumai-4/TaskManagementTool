@@ -126,6 +126,9 @@
                 margin-right: 0;
                 margin-bottom: 0.75rem; /* 12px */
             }
+            #app-container {
+                padding: 0.5rem; /* 8px */
+            }
         }
 
         @media print {
@@ -135,13 +138,13 @@
         }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center justify-center p-2">
 
     <div id="app-container" class="relative w-full max-w-4xl bg-gray-800 rounded-xl shadow-2xl p-6 flex flex-col">
 
         <div id="home-screen" class="absolute inset-0 flex flex-col p-6 fade-enter-active fade-enter-to pb-4">
             <div class="flex justify-between items-center mb-8">
-                <h1 class="text-3xl font-bold text-indigo-400">プロジェクト</h1>
+                <h1 class="text-3xl font-bold text-indigo-400">｜プロジェクト一覧</h1>
                 <label for="display-toggle" class="relative flex items-center cursor-pointer">
                     <input type="checkbox" id="display-toggle" class="sr-only">
                     <div class="toggle-bg block bg-gray-600 w-14 h-8 rounded-full"></div>
@@ -166,23 +169,23 @@
 
             <div class="flex-grow overflow-y-auto pr-2">
                 <div class="mb-6">
-                    <div class="flex justify-between items-center bg-gray-700 p-3 rounded-t-lg shadow-inner">
-                        <h2 class="text-xl font-semibold text-indigo-300">タスク管理 <span id="active-tasks-count" class="text-sm font-medium text-indigo-200 ml-2">0</span></h2>
+                    <div class="flex justify-between items-center bg-gray-700 px-3 pt-3 rounded-t-lg shadow-inner">
+                        <h2 class="text-xl font-semibold text-indigo-300">タスク管理BOX <span id="active-tasks-count" class="text-sm font-medium text-indigo-200 ml-2">0</span></h2>
                         <button id="add-task-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-md transition duration-200 ease-in-out transform hover:scale-110">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
                         </button>
                     </div>
-                    <div id="active-tasks-container" class="bg-gray-700 p-4 rounded-b-lg min-h-[150px] space-y-3 shadow-lg relative">
+                    <div id="active-tasks-container" class="bg-gray-700 px-4 pb-4 pt-1 rounded-b-lg min-h-[150px] space-y-3 shadow-lg relative">
                         <p id="no-active-tasks-message" class="text-gray-400 text-center py-4 hidden">アクティブなタスクはありません。</p>
                         <p id="active-drop-message" class="absolute inset-0 flex items-center justify-center text-gray-400 text-lg hidden pointer-events-none">ここにドロップ</p>
                     </div>
                 </div>
 
                 <div>
-                    <div class="flex justify-between items-center bg-gray-700 p-3 rounded-t-lg shadow-inner">
-                        <h2 class="text-xl font-semibold text-green-300">完了 <span id="completed-tasks-count" class="text-sm font-medium text-green-200 ml-2">0</span></h2>
+                    <div class="flex justify-between items-center bg-gray-700 px-3 pt-3 rounded-t-lg shadow-inner">
+                        <h2 class="text-xl font-semibold text-green-300">完了BOX <span id="completed-tasks-count" class="text-sm font-medium text-green-200 ml-2">0</span></h2>
                     </div>
-                    <div id="completed-tasks-container" class="bg-gray-700 p-4 rounded-b-lg min-h-[100px] space-y-3 shadow-lg relative">
+                    <div id="completed-tasks-container" class="bg-gray-700 px-4 pb-4 pt-1 rounded-b-lg min-h-[100px] space-y-3 shadow-lg relative">
                         <p id="no-completed-tasks-message" class="text-gray-400 text-center py-4 hidden">完了したタスクはありません。</p>
                         <p id="completed-drop-message" class="absolute inset-0 flex items-center justify-center text-gray-400 text-lg hidden pointer-events-none">ここにドロップ</p>
                     </div>
@@ -211,7 +214,7 @@
 
         <div id="color-picker-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden fade-leave-to opacity-0 pointer-events-none">
             <div class="bg-gray-700 p-8 rounded-lg shadow-xl text-center max-w-md w-full">
-                <h2 class="text-2xl font-bold text-indigo-400 mb-6">プロジェクトアイコンの色を変更</h2>
+                <h2 class="text-2xl font-bold text-indigo-300 mb-6">プロジェクトアイコンの色を変更</h2>
                 <div id="project-color-grid" class="grid grid-cols-4 gap-4 mb-6">
                     </div>
                 <button id="close-color-picker-modal-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition duration-200 ease-in-out transform hover:scale-105">閉じる</button>
@@ -219,8 +222,8 @@
         </div>
 
         <div id="task-context-menu" class="absolute bg-gray-700 p-2 rounded-lg shadow-xl z-20 hidden flex flex-col gap-2">
-            <button id="complete-task-btn" class="context-menu-btn bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg transition duration-200">完了</button>
-            <button id="delete-task-btn-menu" class="context-menu-btn bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg transition duration-200">削除</button>
+            <button id="complete-task-btn" class="context-menu-btn font-bold bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition duration-200">完了</button>
+            <button id="delete-task-btn-menu" class="context-menu-btn font-bold bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg transition duration-200">削除</button>
         </div>
 
         <div id="message-box" class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 hidden opacity-0 transition-opacity duration-300">
